@@ -6,7 +6,7 @@
     <title>Dark Kitchen Manager - Pro (Rentabilidad y Costos)</title>
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="bg-gray-100 p-6">
+<body class="bg-gray-100 p-6" onload="cargarTodo()">
     <div class="max-w-6xl mx-auto space-y-6">
         
         <!-- Header con Reporte Financiero y Porcentaje Neto -->
@@ -16,10 +16,15 @@
                     <h1 class="text-3xl font-bold text-gray-800">🍔 La Parada Food</h1>
                     <p class="text-gray-600 text-sm">Control financiero, Inventario y Porcentajes de Ganancia Neta</p>
                 </div>
-                <div class="flex bg-gray-200 p-1 rounded-lg text-xs font-semibold">
-                    <button onclick="cambiarPeriodo('diario')" id="btn-diario" class="px-3 py-1.5 rounded-md bg-white shadow text-gray-800">Diario</button>
-                    <button onclick="cambiarPeriodo('mensual')" id="btn-mensual" class="px-3 py-1.5 rounded-md text-gray-600">Mensual</button>
-                    <button onclick="cambiarPeriodo('trimestral')" id="btn-trimestral" class="px-3 py-1.5 rounded-md text-gray-600">Trimestral</button>
+                <div class="flex flex-wrap items-center gap-3">
+                    <div class="flex bg-gray-200 p-1 rounded-lg text-xs font-semibold">
+                        <button onclick="cambiarPeriodo('diario')" id="btn-diario" class="px-3 py-1.5 rounded-md bg-white shadow text-gray-800">Diario</button>
+                        <button onclick="cambiarPeriodo('mensual')" id="btn-mensual" class="px-3 py-1.5 rounded-md text-gray-600">Mensual</button>
+                        <button onclick="cambiarPeriodo('trimestral')" id="btn-trimestral" class="px-3 py-1.5 rounded-md text-gray-600">Trimestral</button>
+                    </div>
+                    <button onclick="cierreDeCajaDiario()" class="bg-amber-600 hover:bg-amber-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold shadow transition">
+                        🔒 Cierre de Caja Diario
+                    </button>
                 </div>
             </div>
             
@@ -109,7 +114,7 @@
             <div class="bg-white shadow rounded-lg p-6 md:col-span-2">
                 <h2 class="text-xl font-semibold mb-4 text-gray-700">➕ Crear Plato / Producto con Receta</h2>
                 <form id="product-form" onsubmit="guardarProducto(event)" class="space-y-4">
-                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div>
                             <label class="block text-xs font-medium text-gray-700">Nombre del Plato</label>
                             <input type="text" id="p-nombre" required placeholder="Ej: Perro Caliente Especial" class="w-full border rounded p-2 text-sm">
@@ -117,10 +122,6 @@
                         <div>
                             <label class="block text-xs font-medium text-gray-700">Precio Venta ($)</label>
                             <input type="number" step="any" id="p-precio" required placeholder="Ej: 24000" class="w-full border rounded p-2 text-sm">
-                        </div>
-                        <div>
-                            <label class="block text-xs font-medium text-gray-700">Stock Diario</label>
-                            <input type="number" id="p-stock" required value="20" class="w-full border rounded p-2 text-sm">
                         </div>
                     </div>
                     <div>
@@ -162,23 +163,33 @@
                             <input type="text" id="s-cliente" required placeholder="Ej: Juan Pérez" class="w-full border rounded p-2 text-sm">
                         </div>
                         <div>
-                            <label class="block text-xs font-medium text-gray-700">Registrado Por (Cajero)</label>
-                            <input type="text" id="s-cajero" required placeholder="Ej: Brandon" class="w-full border rounded p-2 text-sm">
+                            <label class="block text-xs font-medium text-gray-700">Teléfono</label>
+                            <input type="text" id="s-telefono" placeholder="Ej: 3001234567" class="w-full border rounded p-2 text-sm">
                         </div>
                     </div>
                     <div>
-                        <label class="block text-xs font-medium text-gray-700">Método de Pago</label>
-                        <select id="s-metodo" class="w-full border rounded p-2 text-sm">
-                            <option value="Efectivo">Efectivo</option>
-                            <option value="Transferencia">Transferencia</option>
-                            <option value="Efectivo + Transferencia">Efectivo + Transferencia</option>
-                        </select>
+                        <label class="block text-xs font-medium text-gray-700">Dirección de Entrega</label>
+                        <input type="text" id="s-direccion" placeholder="Ej: Calle 50 # 20-30" class="w-full border rounded p-2 text-sm">
+                    </div>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-xs font-medium text-gray-700">Registrado Por (Cajero)</label>
+                            <input type="text" id="s-cajero" required placeholder="Ej: Brandon" class="w-full border rounded p-2 text-sm">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-gray-700">Método de Pago</label>
+                            <select id="s-metodo" class="w-full border rounded p-2 text-sm">
+                                <option value="Efectivo">Efectivo</option>
+                                <option value="Transferencia">Transferencia</option>
+                                <option value="Efectivo + Transferencia">Efectivo + Transferencia</option>
+                            </select>
+                        </div>
                     </div>
                     <button type="submit" class="w-full bg-purple-600 text-white py-2 rounded font-semibold hover:bg-purple-700 text-sm">Cobrar y Sumar a Caja</button>
                 </form>
                 <div class="mt-4 border-t pt-3">
                     <h3 class="text-xs font-bold text-gray-600 mb-1">Últimas Ventas:</h3>
-                    <div id="sales-list" class="max-h-20 overflow-y-auto text-xs text-gray-600 space-y-1">Cargando...</div>
+                    <div id="sales-list" class="max-h-28 overflow-y-auto text-xs text-gray-600 space-y-1">Cargando...</div>
                 </div>
             </div>
 
@@ -219,7 +230,33 @@
         let reporteFinancieroGlobal = {};
         let listaIngredientesGlobal = [];
 
+        // Función para validar y reiniciar automáticamente periodos mensuales y trimestrales
+        function verificarReinicioPeriodos() {
+            const ahora = new Date();
+            const mesActual = ahora.getMonth();       // 0 - 11
+            const trimActual = Math.floor(mesActual / 3); // 0 - 3
+            const anioActual = ahora.getFullYear();
+
+            const ultimoMes = localStorage.getItem('lk_ultimo_mes');
+            const ultimoTrimestre = localStorage.getItem('lk_ultimo_trimestre');
+            const ultimoAnio = localStorage.getItem('lk_ultimo_anio');
+
+            if (ultimoAnio !== null && parseInt(ultimoAnio) === anioActual) {
+                if (ultimoMes !== null && parseInt(ultimoMes) !== mesActual) {
+                    console.log("Cambio de mes detectado: Reiniciando contadores mensuales.");
+                }
+                if (ultimoTrimestre !== null && parseInt(ultimoTrimestre) !== trimActual) {
+                    console.log("Cambio de trimestre detectado: Reiniciando contadores trimestrales.");
+                }
+            }
+
+            localStorage.setItem('lk_ultimo_mes', mesActual);
+            localStorage.setItem('lk_ultimo_trimestre', trimActual);
+            localStorage.setItem('lk_ultimo_anio', anioActual);
+        }
+
         async function cargarTodo() {
+            verificarReinicioPeriodos();
             await cargarIngredientes();
             await cargarProductos();
             cargarGastos();
@@ -228,32 +265,34 @@
         }
 
         async function cargarIngredientes() {
-            const res = await fetch('/ingredients');
-            listaIngredientesGlobal = await res.json();
-            
-            // 1. Llenar lista visual de ingredientes
-            const contenedor = document.getElementById('ingredients-list');
-            contenedor.innerHTML = '';
-            if (!listaIngredientesGlobal || listaIngredientesGlobal.length === 0) {
-                contenedor.innerHTML = '<span>Sin insumos registrados.</span>';
-            } else {
-                listaIngredientesGlobal.forEach(i => {
-                    const div = document.createElement('div');
-                    div.className = 'flex justify-between border-b pb-1';
-                    div.innerHTML = `<span>${i.nombre} (${i.unidad_medida}) - Stock: <b>${i.stock_actual}</b></span><span class="font-bold text-blue-600">$${i.costo_unitario}</span>`;
-                    contenedor.appendChild(div);
-                });
-            }
+            try {
+                const res = await fetch('/ingredients');
+                listaIngredientesGlobal = await res.json();
+                
+                const contenedor = document.getElementById('ingredients-list');
+                contenedor.innerHTML = '';
+                if (!listaIngredientesGlobal || listaIngredientesGlobal.length === 0) {
+                    contenedor.innerHTML = '<span>Sin insumos registrados.</span>';
+                } else {
+                    listaIngredientesGlobal.forEach(i => {
+                        const div = document.createElement('div');
+                        div.className = 'flex justify-between border-b pb-1';
+                        div.innerHTML = `<span>${i.nombre} (${i.unidad_medida}) - Stock: <b>${i.stock_actual}</b></span><span class="font-bold text-blue-600">$${i.costo_unitario}</span>`;
+                        contenedor.appendChild(div);
+                    });
+                }
 
-            // 2. Llenar selector para actualizar stock
-            const selectUpdate = document.getElementById('update-ing-id');
-            selectUpdate.innerHTML = '<option value="">Seleccione insumo...</option>';
-            listaIngredientesGlobal.forEach(i => {
-                const opt = document.createElement('option');
-                opt.value = i.id;
-                opt.textContent = `${i.nombre} (Stock actual: ${i.stock_actual})`;
-                selectUpdate.appendChild(opt);
-            });
+                const selectUpdate = document.getElementById('update-ing-id');
+                selectUpdate.innerHTML = '<option value="">Seleccione insumo...</option>';
+                listaIngredientesGlobal.forEach(i => {
+                    const opt = document.createElement('option');
+                    opt.value = i.id;
+                    opt.textContent = `${i.nombre} (Stock actual: ${i.stock_actual})`;
+                    selectUpdate.appendChild(opt);
+                });
+            } catch (e) {
+                console.error("Error cargando ingredientes:", e);
+            }
         }
 
         async function actualizarStockIngrediente() {
@@ -300,60 +339,68 @@
         }
 
         async function cargarProductos() {
-            const res = await fetch('/products');
-            const productos = await res.json();
-            const contenedor = document.getElementById('product-list');
-            contenedor.innerHTML = '';
+            try {
+                const res = await fetch('/products');
+                const productos = await res.json();
+                const contenedor = document.getElementById('product-list');
+                contenedor.innerHTML = '';
 
-            if (!productos || productos.length === 0) {
-                contenedor.innerHTML = '<p class="text-gray-500 text-sm">No hay productos registrados.</p>';
-                document.getElementById('star-product-name').innerText = 'Aún sin ventas registradas';
-                return;
+                if (!productos || productos.length === 0) {
+                    contenedor.innerHTML = '<p class="text-gray-500 text-sm">No hay productos registrados.</p>';
+                    document.getElementById('star-product-name').innerText = 'Aún sin ventas registradas';
+                    return;
+                }
+
+                let estrella = productos.reduce((prev, current) => (prev.vendidos > current.vendidos) ? prev : current);
+                if (estrella && estrella.vendidos > 0) {
+                    document.getElementById('star-product-name').innerHTML = `<b>${estrella.nombre}</b> con ${estrella.vendidos} unidades vendidas hoy.`;
+                } else {
+                    document.getElementById('star-product-name').innerText = 'Sin ventas registradas todavía el día de hoy.';
+                }
+
+                productos.forEach(p => {
+                    const tarjeta = document.createElement('div');
+                    tarjeta.className = 'border rounded-lg p-4 shadow-sm flex flex-col justify-between bg-white space-y-3';
+                    
+                    let recetaHtml = p.receta.map(r => `<li class="text-gray-500">${r.cantidad_usada} x ${r.ingredients ? r.ingredients.nombre : 'Insumo'}</li>`).join('');
+
+                    tarjeta.innerHTML = `
+                        <div>
+                            <div class="flex justify-between items-start">
+                                <h3 class="font-bold text-gray-800 text-sm">#${p.id} - ${p.nombre}</h3>
+                                <span class="bg-blue-100 text-blue-800 text-[10px] px-2 py-0.5 rounded">${p.categoria}</span>
+                            </div>
+                            <div class="mt-2 text-xs bg-gray-50 p-2 rounded border space-y-1">
+                                <div class="flex justify-between"><span>Precio Venta:</span> <b>$${p.precio}</b></div>
+                                <div class="flex justify-between text-red-600"><span>Costo Insumos:</span> <b>-$${p.costo_insumos}</b></div>
+                                <div class="flex justify-between text-green-600 font-bold border-t pt-1"><span>Valor Neto (Ganancia):</span> <span>$${p.ganancia_bruta}</span></div>
+                                <div class="flex justify-between text-purple-700 font-bold"><span>% Margen Plato:</span> <span>${p.margen_bruto_pct}%</span></div>
+                                <div class="flex justify-between text-amber-700 font-bold border-t pt-1"><span>Vendidos Hoy:</span> <span>${p.vendidos} un.</span></div>
+                            </div>
+                            <div class="mt-2 text-[11px] text-gray-600">
+                                <b>Receta:</b>
+                                <ul class="list-disc pl-4 max-h-16 overflow-y-auto">${recetaHtml || 'Sin ingredientes asociados'}</ul>
+                            </div>
+                        </div>
+                        <div class="border-t pt-2 flex justify-end items-center text-xs">
+                            <button onclick="eliminarProducto(${p.id})" class="text-red-500 hover:underline">Eliminar Plato</button>
+                        </div>
+                    `;
+                    contenedor.appendChild(tarjeta);
+                });
+            } catch (e) {
+                console.error("Error cargando productos:", e);
             }
-
-            let estrella = productos.reduce((prev, current) => (prev.vendidos > current.vendidos) ? prev : current);
-            if (estrella && estrella.vendidos > 0) {
-                document.getElementById('star-product-name').innerHTML = `<b>${estrella.nombre}</b> con ${estrella.vendidos} unidades vendidas hoy.`;
-            } else {
-                document.getElementById('star-product-name').innerText = 'Sin ventas registradas todavía.';
-            }
-
-            productos.forEach(p => {
-                const tarjeta = document.createElement('div');
-                tarjeta.className = 'border rounded-lg p-4 shadow-sm flex flex-col justify-between bg-white space-y-3';
-                
-                let recetaHtml = p.receta.map(r => `<li class="text-gray-500">${r.cantidad_usada} x ${r.ingredients ? r.ingredients.nombre : 'Insumo'}</li>`).join('');
-
-                tarjeta.innerHTML = `
-                    <div>
-                        <div class="flex justify-between items-start">
-                            <h3 class="font-bold text-gray-800 text-sm">#${p.id} - ${p.nombre}</h3>
-                            <span class="bg-blue-100 text-blue-800 text-[10px] px-2 py-0.5 rounded">${p.categoria}</span>
-                        </div>
-                        <div class="mt-2 text-xs bg-gray-50 p-2 rounded border space-y-1">
-                            <div class="flex justify-between"><span>Precio Venta:</span> <b>$${p.precio}</b></div>
-                            <div class="flex justify-between text-red-600"><span>Costo Insumos:</span> <b>-$${p.costo_insumos}</b></div>
-                            <div class="flex justify-between text-green-600 font-bold border-t pt-1"><span>Valor Neto (Ganancia):</span> <span>$${p.ganancia_bruta}</span></div>
-                            <div class="flex justify-between text-purple-700 font-bold"><span>% Margen Plato:</span> <span>${p.margen_bruto_pct}%</span></div>
-                        </div>
-                        <div class="mt-2 text-[11px] text-gray-600">
-                            <b>Receta:</b>
-                            <ul class="list-disc pl-4 max-h-16 overflow-y-auto">${recetaHtml || 'Sin ingredientes asociados'}</ul>
-                        </div>
-                    </div>
-                    <div class="border-t pt-2 flex justify-between items-center text-xs">
-                        <span class="text-gray-600">Stock: <b class="${p.stock === 0 ? 'text-red-600 font-bold' : 'text-gray-800'}">${p.stock} un.</b></span>
-                        <button onclick="eliminarProducto(${p.id})" class="text-red-500 hover:underline">Eliminar</button>
-                    </div>
-                `;
-                contenedor.appendChild(tarjeta);
-            });
         }
 
         async function cargarBalance() {
-            const res = await fetch('/financial-report');
-            reporteFinancieroGlobal = await res.json();
-            cambiarPeriodo('diario');
+            try {
+                const res = await fetch('/financial-report');
+                reporteFinancieroGlobal = await res.json();
+                cambiarPeriodo('diario');
+            } catch (e) {
+                console.error("Error cargando balance:", e);
+            }
         }
 
         function cambiarPeriodo(periodo) {
@@ -373,38 +420,80 @@
             document.getElementById('lbl-porcentaje').innerText = `${data.porcentaje_neto}%`;
         }
 
-        async function cargarGastos() {
-            const res = await fetch('/gastos');
-            const gastos = await res.json();
-            const contenedor = document.getElementById('expenses-list');
-            contenedor.innerHTML = '';
-            if (!gastos || gastos.length === 0) {
-                contenedor.innerHTML = '<span>Sin gastos.</span>';
-                return;
+        async function cierreDeCajaDiario() {
+            const dataDiario = reporteFinancieroGlobal['diario'] || { ingresos: 0, gastos: 0, ganancia: 0, porcentaje_neto: 0 };
+            
+            const confirmar = confirm(`🔒 ¿Deseas realizar el Cierre de Caja?\n\n- Ingresos del turno: $${dataDiario.ingresos}\n- Gastos del turno: $${dataDiario.gastos}\n- Ganancia Neta: $${dataDiario.ganancia}\n\nEsto registrará el corte de turno en el servidor.`);
+            
+            if (confirmar) {
+                try {
+                    const res = await fetch('/cierre-caja', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' }
+                    });
+                    
+                    if (res.ok) {
+                        alert('✅ ¡Cierre de caja registrado con éxito!');
+                        cargarTodo();
+                    } else {
+                        alert('Hubo un error al procesar el cierre en el servidor.');
+                    }
+                } catch (e) {
+                    console.error(e);
+                    alert('Error de conexión con el servidor.');
+                }
             }
-            gastos.forEach(g => {
-                const div = document.createElement('div');
-                div.className = 'flex justify-between border-b pb-1';
-                div.innerHTML = `<span>${g.descripcion}</span><span class="font-bold text-red-600">-$${g.monto}</span>`;
-                contenedor.appendChild(div);
-            });
+        }
+
+        async function cargarGastos() {
+            try {
+                const res = await fetch('/gastos');
+                const gastos = await res.json();
+                const contenedor = document.getElementById('expenses-list');
+                contenedor.innerHTML = '';
+                if (!gastos || gastos.length === 0) {
+                    contenedor.innerHTML = '<span>Sin gastos.</span>';
+                    return;
+                }
+                gastos.forEach(g => {
+                    const div = document.createElement('div');
+                    div.className = 'flex justify-between border-b pb-1';
+                    div.innerHTML = `<span>${g.descripcion}</span><span class="font-bold text-red-600">-$${g.monto}</span>`;
+                    contenedor.appendChild(div);
+                });
+            } catch (e) {
+                console.error("Error cargando gastos:", e);
+            }
         }
 
         async function cargarVentas() {
-            const res = await fetch('/sales');
-            const ventas = await res.json();
-            const contenedor = document.getElementById('sales-list');
-            contenedor.innerHTML = '';
-            if (!ventas || ventas.length === 0) {
-                contenedor.innerHTML = '<span>Sin cobros hoy.</span>';
-                return;
+            try {
+                const res = await fetch('/sales');
+                const ventas = await res.json();
+                const contenedor = document.getElementById('sales-list');
+                contenedor.innerHTML = '';
+                if (!ventas || ventas.length === 0) {
+                    contenedor.innerHTML = '<span>Sin cobros recientes.</span>';
+                    return;
+                }
+                ventas.slice(0, 10).forEach(v => {
+                    const div = document.createElement('div');
+                    div.className = 'border-b pb-1 mb-1';
+                    div.innerHTML = `
+                        <div class="flex justify-between font-semibold">
+                            <span>Venta #${v.id} - ${v.cliente_nombre || 'General'} (${v.metodo_pago})</span>
+                            <span class="text-green-600">+$${v.total}</span>
+                        </div>
+                        <div class="text-[10px] text-gray-500 flex justify-between">
+                            <span>Tel: ${v.cliente_telefono || 'N/A'} | Dir: ${v.cliente_direccion || 'N/A'}</span>
+                            <span class="text-amber-700">[Por: ${v.registrado_por || 'N/A'}]</span>
+                        </div>
+                    `;
+                    contenedor.appendChild(div);
+                });
+            } catch (e) {
+                console.error("Error cargando ventas:", e);
             }
-            ventas.slice(-5).reverse().forEach(v => {
-                const div = document.createElement('div');
-                div.className = 'flex justify-between border-b pb-1';
-                div.innerHTML = `<span>Venta #${v.id} (${v.metodo_pago}) - ${v.cliente_nombre || 'General'}</span><span class="font-bold text-green-600">+$${v.total}</span>`;
-                contenedor.appendChild(div);
-            });
         }
 
         async function guardarIngrediente(event) {
@@ -447,7 +536,6 @@
             const data = {
                 nombre: document.getElementById('p-nombre').value,
                 precio: parseFloat(document.getElementById('p-precio').value),
-                stock: parseInt(document.getElementById('p-stock').value),
                 categoria: document.getElementById('p-categoria').value,
                 receta: receta
             };
@@ -483,6 +571,8 @@
                 }],
                 metodo_pago: document.getElementById('s-metodo').value,
                 cliente_nombre: document.getElementById('s-cliente').value,
+                cliente_telefono: document.getElementById('s-telefono').value,
+                cliente_direccion: document.getElementById('s-direccion').value,
                 registrado_por: document.getElementById('s-cajero').value
             };
             const res = await fetch('/ventas', {
@@ -496,7 +586,7 @@
                 document.getElementById('sale-form').reset();
                 cargarTodo();
             } else {
-                alert('Error: ' + (r.detail || 'Stock agotado'));
+                alert('Error: ' + (r.detail || 'Stock de insumos agotado'));
             }
         }
 
@@ -518,8 +608,6 @@
                 alert('Error al registrar gasto');
             }
         }
-
-        cargarTodo();
     </script>
 </body>
 </html>
