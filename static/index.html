@@ -156,6 +156,16 @@
                             <input type="number" id="s-cantidad" required value="1" min="1" class="w-full border rounded p-2 text-sm">
                         </div>
                     </div>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-xs font-medium text-gray-700">Nombre del Cliente</label>
+                            <input type="text" id="s-cliente" required placeholder="Ej: Juan Pérez" class="w-full border rounded p-2 text-sm">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-gray-700">Registrado Por (Cajero)</label>
+                            <input type="text" id="s-cajero" required placeholder="Ej: Brandon" class="w-full border rounded p-2 text-sm">
+                        </div>
+                    </div>
                     <div>
                         <label class="block text-xs font-medium text-gray-700">Método de Pago</label>
                         <select id="s-metodo" class="w-full border rounded p-2 text-sm">
@@ -392,7 +402,7 @@
             ventas.slice(-5).reverse().forEach(v => {
                 const div = document.createElement('div');
                 div.className = 'flex justify-between border-b pb-1';
-                div.innerHTML = `<span>Venta #${v.id} (${v.metodo_pago})</span><span class="font-bold text-green-600">+$${v.total}</span>`;
+                div.innerHTML = `<span>Venta #${v.id} (${v.metodo_pago}) - ${v.cliente_nombre || 'General'}</span><span class="font-bold text-green-600">+$${v.total}</span>`;
                 contenedor.appendChild(div);
             });
         }
@@ -471,7 +481,9 @@
                     product_id: parseInt(document.getElementById('s-product-id').value),
                     cantidad: parseInt(document.getElementById('s-cantidad').value)
                 }],
-                metodo_pago: document.getElementById('s-metodo').value
+                metodo_pago: document.getElementById('s-metodo').value,
+                cliente_nombre: document.getElementById('s-cliente').value,
+                registrado_por: document.getElementById('s-cajero').value
             };
             const res = await fetch('/ventas', {
                 method: 'POST',

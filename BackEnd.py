@@ -1,13 +1,16 @@
 from fastapi import FastAPI, HTTPException, Body
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import HTMLResponse, FileResponse
 from pydantic import BaseModel
 from typing import List, Optional
 import os
 import traceback
 from supabase import create_client, Client
+from dotenv import load_dotenv
 
-# Configuración de Supabase
+load_dotenv()
+
+# Configuración de Supabase (con respaldo por si dotenv no carga localmente)
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "https://ghxbjynsgdxldyqcrnfu.supabase.co")
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdoeGJqeW5zZ2R4bGR5cWNybmZ1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg2NTkwOTQsImV4cCI6MjEwNDIzNTA5NH0.LX3qPzAzuVaQKDUQX9BbUBqz5V9OW6jca-LG3K7O7ko")
 
@@ -15,13 +18,15 @@ supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 app = FastAPI(title="La Parada food Manager Pro")
 
+# --- ARCHIVOS ESTÁTICOS Y RUTA PRINCIPAL ---
 if os.path.exists("static"):
     app.mount("/static", StaticFiles(directory="static"), name="static")
 
-@app.get("/")
+@app.get("/", response_class=HTMLResponse)
 def read_root():
     if os.path.exists("static/index.html"):
-        return FileResponse("static/index.html")
+        with open("static/index.html", "r", encoding="utf-8") as f:
+            return f.read()
     return {"message": "La parada food Manager Pro funcionando correctamente"}
 
 
@@ -54,6 +59,8 @@ class VentaItem(BaseModel):
 class VentaCreate(BaseModel):
     items: List[VentaItem]
     metodo_pago: str
+    cliente_nombre: str      # A quién se le vendió
+    registrado_por: str     # Empleado / Cajero que ingresó el pedido
 
 class GastoCreate(BaseModel):
     descripcion: str
@@ -212,7 +219,7 @@ def eliminar_producto(id: int):
 @app.get("/sales")
 def listar_ventas():
     try:
-        response = supabase.table("sales").select("*").execute()
+        response = supabase.table("sales").select("*").order("created_at", desc=True).execute()
         return response.data
     except Exception as e:
         print("ERROR EN /sales:", traceback.format_exc())
@@ -238,7 +245,9 @@ def registrar_venta(venta: VentaCreate):
 
         sale_res = supabase.table("sales").insert({
             "total": total_venta,
-            "metodo_pago": venta.metodo_pago
+            "metodo_pago": venta.metodo_pago,
+            "cliente_nombre": venta.cliente_nombre,
+            "registrado_por": venta.registrado_por
         }).execute()
         
         if not sale_res.data:
@@ -310,7 +319,6 @@ def reporte_financiero():
         total_ingresos = sum([float(s.get("total", 0) or 0) for s in (sales_res.data or [])])
         total_gastos_operativos = sum([float(e.get("monto", 0) or 0) for e in (expenses_res.data or [])])
         
-        # Calcular el costo total de los insumos de todos los productos vendidos con manejo seguro de listas/dicts
         costo_total_insumos_vendidos = 0
         sale_items_res = supabase.table("sale_items").select("product_id, cantidad").execute()
         
