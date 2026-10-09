@@ -56,8 +56,8 @@ class ProductoCreate(BaseModel):
 class VentaItem(BaseModel):
     product_id: int
     cantidad: int
-    extras: Optional[List[RecetaItem]] = [] # Ingredientes adicionales
-    excluidos: Optional[List[int]] = []     # IDs de ingredientes a NO incluir
+    extras: Optional[List[RecetaItem]] = [] 
+    excluidos: Optional[List[int]] = []     
 
 class VentaCreate(BaseModel):
     items: List[VentaItem]
@@ -123,6 +123,19 @@ def actualizar_insumo(id: int, data: IngredienteUpdate):
         return {"mensaje": "Insumo actualizado con éxito", "data": response.data}
     except Exception as e:
         print("ERROR EN PATCH /ingredients:", traceback.format_exc())
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.delete("/ingredients/{id}")
+def eliminar_insumo(id: int):
+    try:
+        # Quitamos el insumo de cualquier receta para evitar errores de relación en la base de datos
+        supabase.table("product_ingredients").delete().eq("ingredient_id", id).execute()
+        
+        # Borramos el insumo
+        response = supabase.table("ingredients").delete().eq("id", id).execute()
+        return {"mensaje": "Insumo eliminado correctamente"}
+    except Exception as e:
+        print("ERROR EN DELETE /ingredients:", traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -214,15 +227,12 @@ def crear_producto(prod: ProductoCreate):
 @app.put("/products/{id}")
 def editar_producto(id: int, prod: ProductoCreate):
     try:
-        # 1. Actualizar info base
         supabase.table("products").update({
             "nombre": prod.nombre, "precio": prod.precio, "categoria": prod.categoria
         }).eq("id", id).execute()
         
-        # 2. Borrar receta antigua
         supabase.table("product_ingredients").delete().eq("product_id", id).execute()
         
-        # 3. Insertar nueva receta
         if prod.receta:
             for item in prod.receta:
                 supabase.table("product_ingredients").insert({
@@ -262,9 +272,8 @@ def registrar_venta(venta: VentaCreate):
     try:
         total_venta = 0
         detalles_productos = []
-        insumos_a_descontar = {} # Acumula descuentos {id_ingrediente: cantidad}
+        insumos_a_descontar = {} 
 
-        # 1. Validación e iteración de pedido
         for item in venta.items:
             prod_res = supabase.table("products").select("*, product_ingredients(cantidad_usada, ingredient_id, ingredients(nombre, costo_unitario, stock_actual))").eq("id", item.product_id).execute()
             if not prod_res.data:
@@ -273,11 +282,10 @@ def registrar_venta(venta: VentaCreate):
             prod = prod_res.data[0]
             precio_item_final = float(prod["precio"])
             
-            # Receta Base: Validar stock solo de lo que NO fue excluido
             for pi in prod.get("product_ingredients", []):
                 ing_id = pi.get("ingredient_id")
                 if ing_id in item.excluidos:
-                    continue # El cliente no quiere esto, no lo gastamos
+                    continue 
                 
                 cant_requerida = float(pi.get("cantidad_usada", 0) or 0) * item.cantidad
                 ing_info = pi.get("ingredients")
@@ -289,7 +297,6 @@ def registrar_venta(venta: VentaCreate):
                     if float(ing_info.get("stock_actual", 0) or 0) < insumos_a_descontar[ing_id]:
                         raise HTTPException(status_code=400, detail=f"Stock insuficiente de '{ing_info.get('nombre')}'")
 
-            # Extras: Validar stock y COBRARLOS
             for extra in item.extras:
                 ext_res = supabase.table("ingredients").select("*").eq("id", extra.ingredient_id).execute()
                 if ext_res.data:
@@ -300,14 +307,12 @@ def registrar_venta(venta: VentaCreate):
                     if float(ext_info.get("stock_actual", 0) or 0) < insumos_a_descontar[extra.ingredient_id]:
                         raise HTTPException(status_code=400, detail=f"Stock insuficiente del extra '{ext_info.get('nombre')}'")
                     
-                    # Cobramos el extra (Ej: Costo del insumo * 2 de margen de ganancia)
                     costo_extra_total = float(ext_info.get("costo_unitario", 0)) * float(extra.cantidad_usada)
                     precio_item_final += (costo_extra_total * 2)
 
             total_venta += precio_item_final * item.cantidad
             detalles_productos.append((prod, item.cantidad))
 
-        # 2. Registrar Venta General
         sale_res = supabase.table("sales").insert({
             "total": total_venta,
             "metodo_pago": venta.metodo_pago,
@@ -319,7 +324,6 @@ def registrar_venta(venta: VentaCreate):
         
         sale_id = sale_res.data[0]["id"]
 
-        # 3. Registrar Historial y Descontar Stock Consolidado
         for prod, cantidad_vendida in detalles_productos:
             supabase.table("sale_items").insert({
                 "sale_id": sale_id, "product_id": prod["id"], "cantidad": cantidad_vendida

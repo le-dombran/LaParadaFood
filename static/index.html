@@ -145,7 +145,6 @@
                         </div>
                     </div>
 
-                    <!-- Caja dinámica de exclusiones y extras -->
                     <div id="opciones-personalizacion" class="hidden bg-amber-50 p-3 rounded border border-amber-200">
                         <h4 class="text-[11px] font-bold text-gray-700 mb-1">❌ El cliente NO quiere (Excluir):</h4>
                         <div id="excluir-items" class="flex flex-wrap gap-2 text-xs mb-3"></div>
@@ -247,8 +246,14 @@
                 } else {
                     listaIngredientesGlobal.forEach(i => {
                         const div = document.createElement('div');
-                        div.className = 'flex justify-between border-b pb-1';
-                        div.innerHTML = `<span>${i.nombre} (${i.unidad_medida}) - Stock: <b>${i.stock_actual}</b></span><span class="font-bold text-blue-600">$${i.costo_unitario}</span>`;
+                        div.className = 'flex justify-between items-center border-b pb-1 mb-1';
+                        div.innerHTML = `
+                            <div class="flex-1">
+                                <span>${i.nombre} (${i.unidad_medida}) - Stock: <b>${i.stock_actual}</b></span>
+                                <span class="font-bold text-blue-600 ml-2">$${i.costo_unitario}</span>
+                            </div>
+                            <button onclick="eliminarInsumo(${i.id})" class="text-red-500 font-bold hover:underline text-[11px] ml-2">Eliminar</button>
+                        `;
                         contenedor.appendChild(div);
                     });
                 }
@@ -259,6 +264,18 @@
                     selectUpdate.appendChild(new Option(`${i.nombre} (Stock: ${i.stock_actual})`, i.id));
                 });
             } catch (e) { console.error(e); }
+        }
+
+        async function eliminarInsumo(id) {
+            if (!confirm('¿Seguro que quieres eliminar este insumo? Se desvinculará de cualquier receta que lo esté usando.')) return;
+            
+            const res = await fetch(`/ingredients/${id}`, { method: 'DELETE' });
+            if (res.ok) {
+                cargarTodo();
+                alert('Insumo eliminado correctamente.');
+            } else {
+                alert('Hubo un error al intentar eliminar el insumo.');
+            }
         }
 
         function cargarDatosInsumo() {
@@ -329,7 +346,6 @@
                 const contenedor = document.getElementById('product-list');
                 contenedor.innerHTML = '';
 
-                // Poblar select de ventas
                 const selectVentas = document.getElementById('s-product-id');
                 selectVentas.innerHTML = '<option value="">Seleccione plato a vender...</option>';
 
@@ -429,8 +445,6 @@
             if (res.ok) cargarTodo();
         }
 
-        // --- PERSONALIZACIÓN Y VENTAS ---
-
         function cargarPersonalizacionVenta() {
             const prodId = document.getElementById('s-product-id').value;
             const contenedor = document.getElementById('opciones-personalizacion');
@@ -479,10 +493,8 @@
         async function registrarVenta(event) {
             event.preventDefault();
             
-            // Recolectar exclusiones
             const excluidos = Array.from(document.querySelectorAll('.chk-excluir:checked')).map(cb => parseInt(cb.value));
             
-            // Recolectar extras
             const extras = [];
             document.querySelectorAll('#extras-items > div').forEach(fila => {
                 const id = fila.querySelector('.extra-ing').value;
@@ -522,8 +534,6 @@
             }
         }
 
-        // --- EXTRAS DE UTILIDAD ---
-        
         async function guardarIngrediente(event) {
             event.preventDefault();
             const data = {
@@ -587,7 +597,7 @@
             try {
                 const gastos = await (await fetch('/gastos')).json();
                 const cont = document.getElementById('expenses-list');
-                if(cont) { /* Omitido por espacio visual si lo quisieras, pero el código backend funciona igual */ }
+                if(cont) {}
             } catch (e) {}
         }
 
