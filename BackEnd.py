@@ -37,8 +37,11 @@ class IngredienteCreate(BaseModel):
     costo_unitario: float
     stock_actual: Optional[float] = 0.0
 
-class StockUpdate(BaseModel):
-    stock_actual: float
+class IngredienteUpdate(BaseModel):
+    nombre: Optional[str] = None
+    unidad_medida: Optional[str] = None
+    costo_unitario: Optional[float] = None
+    stock_actual: Optional[float] = None
 
 class RecetaItem(BaseModel):
     ingredient_id: int
@@ -53,6 +56,8 @@ class ProductoCreate(BaseModel):
 class VentaItem(BaseModel):
     product_id: int
     cantidad: int
+    extras: Optional[List[RecetaItem]] = [] # Ingredientes adicionales
+    excluidos: Optional[List[int]] = []     # IDs de ingredientes a NO incluir
 
 class VentaCreate(BaseModel):
     items: List[VentaItem]
@@ -89,7 +94,6 @@ def listar_ingredientes():
         response = supabase.table("ingredients").select("*").execute()
         return response.data
     except Exception as e:
-        print("ERROR EN /ingredients:", traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/ingredients")
@@ -104,18 +108,21 @@ def crear_ingrediente(ing: IngredienteCreate):
         response = supabase.table("ingredients").insert(data).execute()
         return {"mensaje": "Insumo creado con éxito", "data": response.data}
     except Exception as e:
-        print("ERROR EN POST /ingredients:", traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.patch("/ingredients/{id}/stock")
-def actualizar_stock_insumo(id: int, data: StockUpdate):
+@app.patch("/ingredients/{id}")
+def actualizar_insumo(id: int, data: IngredienteUpdate):
     try:
-        response = supabase.table("ingredients").update({"stock_actual": data.stock_actual}).eq("id", id).execute()
+        update_data = {k: v for k, v in data.dict().items() if v is not None}
+        if not update_data:
+            raise HTTPException(status_code=400, detail="Sin datos para actualizar")
+        
+        response = supabase.table("ingredients").update(update_data).eq("id", id).execute()
         if not response.data:
             raise HTTPException(status_code=404, detail="Insumo no encontrado")
-        return {"mensaje": "Stock actualizado con éxito", "data": response.data}
+        return {"mensaje": "Insumo actualizado con éxito", "data": response.data}
     except Exception as e:
-        print("ERROR EN PATCH /ingredients/stock:", traceback.format_exc())
+        print("ERROR EN PATCH /ingredients:", traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -126,7 +133,6 @@ def listar_productos():
     try:
         res_prod = supabase.table("products").select("*, product_ingredients(cantidad_usada, ingredient_id, ingredients(*))").execute()
         productos = res_prod.data if res_prod.data else []
-        
         start_diario = obtener_inicio_diario()
 
         sales_diario_ids = []
@@ -141,8 +147,7 @@ def listar_productos():
             costo_insumos = 0
             receta_formateada = []
             
-            pi_list = p.get("product_ingredients", [])
-            for pi in pi_list:
+            for pi in p.get("product_ingredients", []):
                 ing = pi.get("ingredients")
                 if isinstance(ing, list):
                     ing = ing[0] if len(ing) > 0 else {}
@@ -153,6 +158,7 @@ def listar_productos():
                 
                 receta_formateada.append({
                     "cantidad_usada": cant,
+                    "ingredient_id": pi.get("ingredient_id"),
                     "ingredients": ing
                 })
             
@@ -182,57 +188,62 @@ def listar_productos():
             })
         return resultado
     except Exception as e:
-        print("ERROR EN /products:", traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/products")
 def crear_producto(prod: ProductoCreate):
     try:
-        prod_data = {
-            "nombre": prod.nombre,
-            "precio": prod.precio,
-            "categoria": prod.categoria
-        }
-        res_prod = supabase.table("products").insert(prod_data).execute()
-        if not res_prod.data:
-            raise HTTPException(status_code=400, detail="No se pudo crear el producto")
+        res_prod = supabase.table("products").insert({
+            "nombre": prod.nombre, "precio": prod.precio, "categoria": prod.categoria
+        }).execute()
         
         new_product_id = res_prod.data[0]["id"]
 
         if prod.receta:
             for item in prod.receta:
-                rel_data = {
+                supabase.table("product_ingredients").insert({
                     "product_id": new_product_id,
                     "ingredient_id": item.ingredient_id,
                     "cantidad_usada": item.cantidad_usada
-                }
-                try:
-                    supabase.table("product_ingredients").insert(rel_data).execute()
-                except Exception:
-                    pass
+                }).execute()
 
         return {"mensaje": "Producto creado con éxito"}
     except Exception as e:
-        print("ERROR EN POST /products:", traceback.format_exc())
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.put("/products/{id}")
+def editar_producto(id: int, prod: ProductoCreate):
+    try:
+        # 1. Actualizar info base
+        supabase.table("products").update({
+            "nombre": prod.nombre, "precio": prod.precio, "categoria": prod.categoria
+        }).eq("id", id).execute()
+        
+        # 2. Borrar receta antigua
+        supabase.table("product_ingredients").delete().eq("product_id", id).execute()
+        
+        # 3. Insertar nueva receta
+        if prod.receta:
+            for item in prod.receta:
+                supabase.table("product_ingredients").insert({
+                    "product_id": id,
+                    "ingredient_id": item.ingredient_id,
+                    "cantidad_usada": item.cantidad_usada
+                }).execute()
+
+        return {"mensaje": "Producto y receta actualizados con éxito"}
+    except Exception as e:
+        print("ERROR EN PUT /products:", traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.delete("/products/{id}")
 def eliminar_producto(id: int):
     try:
-        try:
-            supabase.table("sale_items").delete().eq("product_id", id).execute()
-        except Exception:
-            pass
-
-        try:
-            supabase.table("product_ingredients").delete().eq("product_id", id).execute()
-        except Exception:
-            pass
-
+        supabase.table("sale_items").delete().eq("product_id", id).execute()
+        supabase.table("product_ingredients").delete().eq("product_id", id).execute()
         response = supabase.table("products").delete().eq("id", id).execute()
-        return {"mensaje": "Producto eliminado correctamente", "data": response.data}
+        return {"mensaje": "Producto eliminado correctamente"}
     except Exception as e:
-        print("ERROR EN DELETE /products:", traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -244,7 +255,6 @@ def listar_ventas():
         response = supabase.table("sales").select("*").order("created_at", desc=True).execute()
         return response.data
     except Exception as e:
-        print("ERROR EN /sales:", traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/ventas")
@@ -252,35 +262,52 @@ def registrar_venta(venta: VentaCreate):
     try:
         total_venta = 0
         detalles_productos = []
+        insumos_a_descontar = {} # Acumula descuentos {id_ingrediente: cantidad}
 
-        # 1. Validación previa de inventario de insumos para cada plato de la orden
+        # 1. Validación e iteración de pedido
         for item in venta.items:
             prod_res = supabase.table("products").select("*, product_ingredients(cantidad_usada, ingredient_id, ingredients(nombre, costo_unitario, stock_actual))").eq("id", item.product_id).execute()
             if not prod_res.data:
                 raise HTTPException(status_code=404, detail=f"Producto ID {item.product_id} no encontrado")
             
             prod = prod_res.data[0]
+            precio_item_final = float(prod["precio"])
             
-            # Validar que los insumos tengan suficiente stock para la cantidad pedida
+            # Receta Base: Validar stock solo de lo que NO fue excluido
             for pi in prod.get("product_ingredients", []):
+                ing_id = pi.get("ingredient_id")
+                if ing_id in item.excluidos:
+                    continue # El cliente no quiere esto, no lo gastamos
+                
                 cant_requerida = float(pi.get("cantidad_usada", 0) or 0) * item.cantidad
                 ing_info = pi.get("ingredients")
                 if isinstance(ing_info, list):
                     ing_info = ing_info[0] if len(ing_info) > 0 else {}
                 
                 if ing_info and isinstance(ing_info, dict):
-                    stock_actual = float(ing_info.get("stock_actual", 0) or 0)
-                    if stock_actual < cant_requerida:
-                        nombre_ing = ing_info.get('nombre', 'Insumo')
-                        raise HTTPException(
-                            status_code=400, 
-                            detail=f"Stock insuficiente de '{nombre_ing}' para preparar {prod['nombre']}"
-                        )
+                    insumos_a_descontar[ing_id] = insumos_a_descontar.get(ing_id, 0) + cant_requerida
+                    if float(ing_info.get("stock_actual", 0) or 0) < insumos_a_descontar[ing_id]:
+                        raise HTTPException(status_code=400, detail=f"Stock insuficiente de '{ing_info.get('nombre')}'")
 
-            total_venta += prod["precio"] * item.cantidad
+            # Extras: Validar stock y COBRARLOS
+            for extra in item.extras:
+                ext_res = supabase.table("ingredients").select("*").eq("id", extra.ingredient_id).execute()
+                if ext_res.data:
+                    ext_info = ext_res.data[0]
+                    cant_requerida = float(extra.cantidad_usada) * item.cantidad
+                    insumos_a_descontar[extra.ingredient_id] = insumos_a_descontar.get(extra.ingredient_id, 0) + cant_requerida
+                    
+                    if float(ext_info.get("stock_actual", 0) or 0) < insumos_a_descontar[extra.ingredient_id]:
+                        raise HTTPException(status_code=400, detail=f"Stock insuficiente del extra '{ext_info.get('nombre')}'")
+                    
+                    # Cobramos el extra (Ej: Costo del insumo * 2 de margen de ganancia)
+                    costo_extra_total = float(ext_info.get("costo_unitario", 0)) * float(extra.cantidad_usada)
+                    precio_item_final += (costo_extra_total * 2)
+
+            total_venta += precio_item_final * item.cantidad
             detalles_productos.append((prod, item.cantidad))
 
-        # 2. Registrar la venta general
+        # 2. Registrar Venta General
         sale_res = supabase.table("sales").insert({
             "total": total_venta,
             "metodo_pago": venta.metodo_pago,
@@ -290,37 +317,21 @@ def registrar_venta(venta: VentaCreate):
             "registrado_por": venta.registrado_por
         }).execute()
         
-        if not sale_res.data:
-            raise HTTPException(status_code=400, detail="Error al registrar la venta general")
-            
         sale_id = sale_res.data[0]["id"]
 
-        # 3. Registrar items de la venta y descontar estrictamente los insumos de bodega
+        # 3. Registrar Historial y Descontar Stock Consolidado
         for prod, cantidad_vendida in detalles_productos:
-            try:
-                supabase.table("sale_items").insert({
-                    "sale_id": sale_id,
-                    "product_id": prod["id"],
-                    "cantidad": cantidad_vendida
-                }).execute()
-            except Exception:
-                pass
+            supabase.table("sale_items").insert({
+                "sale_id": sale_id, "product_id": prod["id"], "cantidad": cantidad_vendida
+            }).execute()
 
-            for pi in prod.get("product_ingredients", []):
-                ing_id = pi.get("ingredient_id")
-                cant_usada = pi.get("cantidad_usada", 0)
-                ing_info = pi.get("ingredients")
-                if isinstance(ing_info, list):
-                    ing_info = ing_info[0] if len(ing_info) > 0 else {}
-                
-                if ing_id and ing_info and isinstance(ing_info, dict):
-                    stock_actual_insumo = float(ing_info.get("stock_actual", 0) or 0)
-                    total_a_descontar = float(cant_usada or 0) * cantidad_vendida
-                    nuevo_stock_insumo = stock_actual_insumo - total_a_descontar
-
-                    supabase.table("ingredients").update({
-                        "stock_actual": round(max(0.0, nuevo_stock_insumo), 4)
-                    }).eq("id", ing_id).execute()
+        for ing_id, cant_total in insumos_a_descontar.items():
+            ing_res = supabase.table("ingredients").select("stock_actual").eq("id", ing_id).execute()
+            if ing_res.data:
+                nuevo_stock = float(ing_res.data[0].get("stock_actual", 0)) - cant_total
+                supabase.table("ingredients").update({
+                    "stock_actual": round(max(0.0, nuevo_stock), 4)
+                }).eq("id", ing_id).execute()
 
         return {"mensaje": "Venta cobrada con éxito", "total_cobrado": total_venta}
     except HTTPException as he:
@@ -332,34 +343,25 @@ def registrar_venta(venta: VentaCreate):
 @app.get("/gastos")
 def listar_gastos():
     try:
-        response = supabase.table("expenses").select("*").execute()
-        return response.data
+        return supabase.table("expenses").select("*").execute().data
     except Exception as e:
-        print("ERROR EN /gastos:", traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/gastos")
 def registrar_gasto(gasto: GastoCreate):
     try:
-        response = supabase.table("expenses").insert({
-            "descripcion": gasto.descripcion,
-            "monto": gasto.monto
-        }).execute()
+        response = supabase.table("expenses").insert({"descripcion": gasto.descripcion, "monto": gasto.monto}).execute()
         return {"mensaje": "Gasto registrado", "data": response.data}
     except Exception as e:
-        print("ERROR EN POST /gastos:", traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/cierre-caja")
 def hacer_cierre_caja():
     try:
         now_str = datetime.now(timezone.utc).isoformat()
-        response = supabase.table("cash_closures").insert({
-            "closed_at": now_str
-        }).execute()
+        supabase.table("cash_closures").insert({"closed_at": now_str}).execute()
         return {"mensaje": "Cierre de caja realizado con éxito", "closed_at": now_str}
     except Exception as e:
-        print("ERROR EN POST /cierre-caja:", traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/financial-report")
@@ -371,7 +373,6 @@ def reporte_financiero():
         all_sales = sales_res.data or []
         all_expenses = expenses_res.data or []
 
-        # Cambia la línea conflictiva por esta estructura:
         productos_res = supabase.table("products").select("id, product_ingredients(cantidad_usada, ingredients(costo_unitario))").execute()
         prod_costo_map = {}
         if productos_res.data: 
@@ -379,8 +380,7 @@ def reporte_financiero():
                 costo_unit_prod = 0
                 for pi in p.get("product_ingredients", []):
                     ing = pi.get("ingredients")
-                    if isinstance(ing, list):
-                        ing = ing[0] if len(ing) > 0 else {}
+                    if isinstance(ing, list): ing = ing[0] if len(ing) > 0 else {}
                     cant = pi.get("cantidad_usada", 0)
                     if ing and isinstance(ing, dict):
                         costo_unit_prod += float(cant or 0) * float(ing.get("costo_unitario", 0) or 0)
@@ -433,36 +433,22 @@ def reporte_financiero():
             if created_str:
                 try:
                     dt = datetime.fromisoformat(created_str.replace("Z", "+00:00"))
-                    if dt >= start_quarter:
-                        sales_quarter.append(s)
-                    if dt >= start_month:
-                        sales_month.append(s)
-                    if dt >= start_diario:
-                        sales_diario.append(s)
+                    if dt >= start_quarter: sales_quarter.append(s)
+                    if dt >= start_month: sales_month.append(s)
+                    if dt >= start_diario: sales_diario.append(s)
                 except Exception:
-                    sales_quarter.append(s)
-                    sales_month.append(s)
-                    sales_diario.append(s)
+                    pass
 
         for e in all_expenses:
             created_str = e.get("created_at")
             if created_str:
                 try:
                     dt = datetime.fromisoformat(created_str.replace("Z", "+00:00"))
-                    if dt >= start_quarter:
-                        expenses_quarter.append(e)
-                    if dt >= start_month:
-                        expenses_month.append(e)
-                    if dt >= start_diario:
-                        expenses_diario.append(e)
+                    if dt >= start_quarter: expenses_quarter.append(e)
+                    if dt >= start_month: expenses_month.append(e)
+                    if dt >= start_diario: expenses_diario.append(e)
                 except Exception:
-                    expenses_quarter.append(e)
-                    expenses_month.append(e)
-                    expenses_diario.append(e)
-            else:
-                expenses_quarter.append(e)
-                expenses_month.append(e)
-                expenses_diario.append(e)
+                    pass
 
         return {
             "diario": calcular_metricas(sales_diario, expenses_diario),
@@ -470,5 +456,5 @@ def reporte_financiero():
             "trimestral": calcular_metricas(sales_quarter, expenses_quarter)
         }
     except Exception as e:
-        print("ERROR EN /financial-report:", traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(e))
+    
