@@ -4,6 +4,7 @@ from fastapi.responses import HTMLResponse, FileResponse
 from pydantic import BaseModel
 from typing import List, Optional
 import os
+import json
 import traceback
 from datetime import datetime, timezone, timedelta
 from supabase import create_client, Client
@@ -72,7 +73,8 @@ class GastoCreate(BaseModel):
     monto: float
 
 
-# --- FUNCIÓN AUXILIAR PARA OBTENER EL INICIO DEL TURNO DIARIO ---
+# --- FUNCIONES AUXILIARES ---
+
 def obtener_inicio_diario():
     try:
         closure_res = supabase.table("cash_closures").select("closed_at").order("closed_at", desc=True).limit(1).execute()
@@ -84,6 +86,20 @@ def obtener_inicio_diario():
         print("ERROR OBTENIENDO CIERRE:", e)
     
     return datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+
+def extraer_meta_venta(registro_str: str):
+    """Separa el nombre del cajero de los metadatos de personalización y costos de la venta."""
+    if not registro_str:
+        return "", None
+    if "||META||" in registro_str:
+        partes = registro_str.split("||META||", 1)
+        cajero_limpio = partes[0].strip()
+        try:
+            meta = json.loads(partes[1])
+            return cajero_limpio, meta
+        except Exception:
+            return cajero_limpio, None
+    return registro_str, None
 
 
 # --- RUTAS DE INGREDIENTES / INSUMOS ---
@@ -128,11 +144,8 @@ def actualizar_insumo(id: int, data: IngredienteUpdate):
 @app.delete("/ingredients/{id}")
 def eliminar_insumo(id: int):
     try:
-        # Quitamos el insumo de cualquier receta para evitar errores de relación en la base de datos
         supabase.table("product_ingredients").delete().eq("ingredient_id", id).execute()
-        
-        # Borramos el insumo
-        response = supabase.table("ingredients").delete().eq("id", id).execute()
+        supabase.table("ingredients").delete().eq("id", id).execute()
         return {"mensaje": "Insumo eliminado correctamente"}
     except Exception as e:
         print("ERROR EN DELETE /ingredients:", traceback.format_exc())
@@ -251,7 +264,7 @@ def eliminar_producto(id: int):
     try:
         supabase.table("sale_items").delete().eq("product_id", id).execute()
         supabase.table("product_ingredients").delete().eq("product_id", id).execute()
-        response = supabase.table("products").delete().eq("id", id).execute()
+        supabase.table("products").delete().eq("id", id).execute()
         return {"mensaje": "Producto eliminado correctamente"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -263,7 +276,48 @@ def eliminar_producto(id: int):
 def listar_ventas():
     try:
         response = supabase.table("sales").select("*").order("created_at", desc=True).execute()
-        return response.data
+        ventas = response.data or []
+
+        # Mapear nombres de productos y sale_items para reconstruir detalles si hace falta
+        prod_res = supabase.table("products").select("id, nombre").execute()
+        prod_map = {p["id"]: p["nombre"] for p in (prod_res.data or [])}
+
+        items_res = supabase.table("sale_items").select("sale_id, product_id, cantidad").execute()
+        items_por_venta = {}
+        for it in (items_res.data or []):
+            s_id = it.get("sale_id")
+            if s_id not in items_por_venta:
+                items_por_venta[s_id] = []
+            nombre_p = prod_map.get(it.get("product_id"), f"Plato #{it.get('product_id')}")
+            items_por_venta[s_id].append(f"{it.get('cantidad', 1)}x {nombre_p}")
+
+        start_diario = obtener_inicio_diario()
+        resultado = []
+
+        for v in ventas:
+            cajero_limpio, meta = extraer_meta_venta(v.get("registrado_por", ""))
+            detalles_pedido = []
+            if meta and isinstance(meta, dict) and meta.get("d"):
+                detalles_pedido = meta["d"]
+            else:
+                detalles_pedido = items_por_venta.get(v["id"], ["Sin detalle de platos"])
+
+            es_turno_actual = False
+            created_str = v.get("created_at")
+            if created_str:
+                try:
+                    dt = datetime.fromisoformat(created_str.replace("Z", "+00:00"))
+                    es_turno_actual = (dt >= start_diario)
+                except Exception:
+                    pass
+
+            v_copia = dict(v)
+            v_copia["registrado_por"] = cajero_limpio
+            v_copia["detalles_pedido"] = detalles_pedido
+            v_copia["turno_actual"] = es_turno_actual
+            resultado.append(v_copia)
+
+        return resultado
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -272,35 +326,55 @@ def registrar_venta(venta: VentaCreate):
     try:
         total_venta = 0
         detalles_productos = []
-        insumos_a_descontar = {} 
+        insumos_a_descontar = {}
+        textos_resumen_pedido = []
+        meta_items_costeo = []
 
         for item in venta.items:
-            prod_res = supabase.table("products").select("*, product_ingredients(cantidad_usada, ingredient_id, ingredients(nombre, costo_unitario, stock_actual))").eq("id", item.product_id).execute()
+            prod_res = supabase.table("products").select(
+                "*, product_ingredients(cantidad_usada, ingredient_id, ingredients(nombre, costo_unitario, stock_actual))"
+            ).eq("id", item.product_id).execute()
+            
             if not prod_res.data:
                 raise HTTPException(status_code=404, detail=f"Producto ID {item.product_id} no encontrado")
             
             prod = prod_res.data[0]
             precio_item_final = float(prod["precio"])
-            
-            for pi in prod.get("product_ingredients", []):
+            receta_plato = prod.get("product_ingredients", []) or []
+
+            excluidos_ids = item.excluidos or []
+            extras_list = item.extras or []
+
+            insumos_activos_usados = 0
+            nombres_excluidos = []
+            nombres_extras = []
+
+            for pi in receta_plato:
                 ing_id = pi.get("ingredient_id")
-                if ing_id in item.excluidos:
-                    continue 
-                
-                cant_requerida = float(pi.get("cantidad_usada", 0) or 0) * item.cantidad
                 ing_info = pi.get("ingredients")
                 if isinstance(ing_info, list):
                     ing_info = ing_info[0] if len(ing_info) > 0 else {}
-                
-                if ing_info and isinstance(ing_info, dict):
-                    insumos_a_descontar[ing_id] = insumos_a_descontar.get(ing_id, 0) + cant_requerida
-                    if float(ing_info.get("stock_actual", 0) or 0) < insumos_a_descontar[ing_id]:
-                        raise HTTPException(status_code=400, detail=f"Stock insuficiente de '{ing_info.get('nombre')}'")
 
-            for extra in item.extras:
+                if not ing_info or not isinstance(ing_info, dict):
+                    continue
+
+                if ing_id in excluidos_ids:
+                    nombres_excluidos.append(ing_info.get("nombre", f"ID {ing_id}"))
+                    continue
+                
+                insumos_activos_usados += 1
+                cant_requerida = float(pi.get("cantidad_usada", 0) or 0) * item.cantidad
+                insumos_a_descontar[ing_id] = insumos_a_descontar.get(ing_id, 0) + cant_requerida
+                
+                if float(ing_info.get("stock_actual", 0) or 0) < insumos_a_descontar[ing_id]:
+                    raise HTTPException(status_code=400, detail=f"Stock insuficiente de '{ing_info.get('nombre')}'")
+
+            extras_meta = []
+            for extra in extras_list:
                 ext_res = supabase.table("ingredients").select("*").eq("id", extra.ingredient_id).execute()
                 if ext_res.data:
                     ext_info = ext_res.data[0]
+                    insumos_activos_usados += 1
                     cant_requerida = float(extra.cantidad_usada) * item.cantidad
                     insumos_a_descontar[extra.ingredient_id] = insumos_a_descontar.get(extra.ingredient_id, 0) + cant_requerida
                     
@@ -309,9 +383,37 @@ def registrar_venta(venta: VentaCreate):
                     
                     costo_extra_total = float(ext_info.get("costo_unitario", 0)) * float(extra.cantidad_usada)
                     precio_item_final += (costo_extra_total * 2)
+                    nombres_extras.append(f"{extra.cantidad_usada:g}x {ext_info.get('nombre')}")
+                    extras_meta.append({"id": extra.ingredient_id, "q": float(extra.cantidad_usada)})
+
+            # Validación: No permitir cobrar un plato si quedó completamente vacío de insumos
+            if insumos_activos_usados == 0:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"El plato '{prod['nombre']}' no tiene ningún insumo activo (fueron eliminados o excluidos todos). No se puede cobrar un plato vacío."
+                )
 
             total_venta += precio_item_final * item.cantidad
             detalles_productos.append((prod, item.cantidad))
+
+            # Construir descripción legible del plato para el historial
+            notas = []
+            if nombres_excluidos:
+                notas.append(f"Sin: {', '.join(nombres_excluidos)}")
+            if nombres_extras:
+                notas.append(f"Extra: {', '.join(nombres_extras)}")
+            nota_str = f" ({' | '.join(notas)})" if notas else ""
+            textos_resumen_pedido.append(f"{item.cantidad}x {prod['nombre']}{nota_str}")
+
+            meta_items_costeo.append({
+                "p": prod["id"],
+                "q": item.cantidad,
+                "ex": excluidos_ids,
+                "ext": extras_meta
+            })
+
+        meta_payload = json.dumps({"d": textos_resumen_pedido, "i": meta_items_costeo}, ensure_ascii=False)
+        registrado_por_meta = f"{venta.registrado_por} ||META||{meta_payload}"
 
         sale_res = supabase.table("sales").insert({
             "total": total_venta,
@@ -319,7 +421,7 @@ def registrar_venta(venta: VentaCreate):
             "cliente_nombre": venta.cliente_nombre,
             "cliente_telefono": venta.cliente_telefono,
             "cliente_direccion": venta.cliente_direccion,
-            "registrado_por": venta.registrado_por
+            "registrado_por": registrado_por_meta
         }).execute()
         
         sale_id = sale_res.data[0]["id"]
@@ -373,22 +475,22 @@ def reporte_financiero():
     try:
         sales_res = supabase.table("sales").select("*").execute()
         expenses_res = supabase.table("expenses").select("monto, created_at").execute()
+        ing_res = supabase.table("ingredients").select("id, costo_unitario").execute()
+        productos_res = supabase.table("products").select("id, product_ingredients(ingredient_id, cantidad_usada)").execute()
 
         all_sales = sales_res.data or []
         all_expenses = expenses_res.data or []
 
-        productos_res = supabase.table("products").select("id, product_ingredients(cantidad_usada, ingredients(costo_unitario))").execute()
-        prod_costo_map = {}
-        if productos_res.data: 
-            for p in productos_res.data:
-                costo_unit_prod = 0
-                for pi in p.get("product_ingredients", []):
-                    ing = pi.get("ingredients")
-                    if isinstance(ing, list): ing = ing[0] if len(ing) > 0 else {}
-                    cant = pi.get("cantidad_usada", 0)
-                    if ing and isinstance(ing, dict):
-                        costo_unit_prod += float(cant or 0) * float(ing.get("costo_unitario", 0) or 0)
-                prod_costo_map[p["id"]] = costo_unit_prod
+        # Mapa de costos unitarios de insumos activos actuales (si un insumo se eliminó, ya no figura y se descuenta)
+        ing_costo_map = {
+            i["id"]: float(i.get("costo_unitario", 0) or 0)
+            for i in (ing_res.data or [])
+        }
+
+        # Receta por producto
+        prod_receta_map = {}
+        for p in (productos_res.data or []):
+            prod_receta_map[p["id"]] = p.get("product_ingredients", []) or []
 
         sale_items_res = supabase.table("sale_items").select("sale_id, product_id, cantidad").execute()
         sale_items_map = {}
@@ -403,28 +505,59 @@ def reporte_financiero():
         start_month = now - timedelta(days=30)
         start_quarter = now - timedelta(days=90)
 
+        def calcular_costo_venta(s):
+            _, meta = extraer_meta_venta(s.get("registrado_por", ""))
+            costo_venta = 0.0
+
+            # Si tiene metadatos detallados (excluidos y extras), descontamos los excluidos y sumamos los extras
+            if meta and isinstance(meta, dict) and "i" in meta:
+                for it in meta["i"]:
+                    p_id = it.get("p")
+                    cant_platos = float(it.get("q", 1) or 1)
+                    excluidos = it.get("ex", []) or []
+                    extras = it.get("ext", []) or []
+
+                    costo_unitario_plato = 0.0
+                    for pi in prod_receta_map.get(p_id, []):
+                        ing_id = pi.get("ingredient_id")
+                        if ing_id in excluidos:
+                            continue
+                        if ing_id in ing_costo_map:
+                            costo_unitario_plato += float(pi.get("cantidad_usada", 0) or 0) * ing_costo_map[ing_id]
+
+                    for ext in extras:
+                        ext_id = ext.get("id")
+                        if ext_id in ing_costo_map:
+                            costo_unitario_plato += float(ext.get("q", 0) or 0) * ing_costo_map[ext_id]
+
+                    costo_venta += costo_unitario_plato * cant_platos
+            else:
+                # Respaldo para ventas antiguas
+                s_id = s.get("id")
+                for item in sale_items_map.get(s_id, []):
+                    p_id = item.get("product_id")
+                    cant_vendida = float(item.get("cantidad", 0) or 0)
+                    costo_unit = sum([
+                        float(pi.get("cantidad_usada", 0) or 0) * ing_costo_map.get(pi.get("ingredient_id"), 0.0)
+                        for pi in prod_receta_map.get(p_id, [])
+                    ])
+                    costo_venta += costo_unit * cant_vendida
+
+            return costo_venta
+
         def calcular_metricas(sales_filtradas, expenses_filtradas):
             total_ingresos = sum([float(s.get("total", 0) or 0) for s in sales_filtradas])
             total_gastos_operativos = sum([float(e.get("monto", 0) or 0) for e in expenses_filtradas])
-            
-            costo_total_insumos_vendidos = 0
-            for s in sales_filtradas:
-                s_id = s.get("id")
-                items = sale_items_map.get(s_id, [])
-                for item in items:
-                    p_id = item.get("product_id")
-                    cant_vendida = item.get("cantidad", 0)
-                    costo_unit = prod_costo_map.get(p_id, 0)
-                    costo_total_insumos_vendidos += costo_unit * cant_vendida
+            costo_total_insumos_vendidos = sum([calcular_costo_venta(s) for s in sales_filtradas])
 
             egresos_totales = total_gastos_operativos + costo_total_insumos_vendidos
             ganancia_real = total_ingresos - egresos_totales
             porcentaje = (ganancia_real / total_ingresos * 100) if total_ingresos > 0 else 0
 
             return {
-                "ingresos": total_ingresos,
-                "gastos": egresos_totales,
-                "ganancia": ganancia_real,
+                "ingresos": round(total_ingresos, 2),
+                "gastos": round(egresos_totales, 2),
+                "ganancia": round(ganancia_real, 2),
                 "porcentaje_neto": round(porcentaje, 1)
             }
 
@@ -460,5 +593,4 @@ def reporte_financiero():
             "trimestral": calcular_metricas(sales_quarter, expenses_quarter)
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-    
+        raise HTTPException(status_code=500, detail=str(e))   

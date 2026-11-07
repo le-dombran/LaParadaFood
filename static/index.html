@@ -4,8 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dark Kitchen Manager - Pro (Rentabilidad y Costos)</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
 </head>
-<script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
 <body class="bg-gray-100 p-6" onload="cargarTodo()">
     <div class="max-w-6xl mx-auto space-y-6">
         
@@ -22,7 +22,7 @@
                         <button onclick="cambiarPeriodo('mensual')" id="btn-mensual" class="px-3 py-1.5 rounded-md text-gray-600">Mensual</button>
                         <button onclick="cambiarPeriodo('trimestral')" id="btn-trimestral" class="px-3 py-1.5 rounded-md text-gray-600">Trimestral</button>
                     </div>
-                    <button onclick="cierreDeCajaDiario()" class="bg-amber-600 hover:bg-amber-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold shadow transition">
+                    <button onclick="abrirModalCierreCaja()" class="bg-amber-600 hover:bg-amber-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold shadow transition">
                         🔒 Cierre Caja
                     </button>
                 </div>
@@ -207,9 +207,14 @@
                         <button type="submit" class="w-full bg-red-600 text-white py-2 rounded font-semibold hover:bg-red-700 text-sm">Guardar Gasto</button>
                     </form>
                 </div>
-                <div class="mt-4 border-t pt-3">
-                    <h3 class="text-xs font-bold text-gray-600 mb-1">Últimas Ventas (Historial):</h3>
-                    <div id="sales-list" class="max-h-28 overflow-y-auto text-xs text-gray-600 space-y-1">Cargando...</div>
+
+                <!-- Historial Detallado de Pedidos -->
+                <div class="mt-6 border-t pt-4 flex-1 flex flex-col">
+                    <div class="flex justify-between items-center mb-2">
+                        <h3 class="text-sm font-bold text-gray-700">🧾 Historial Detallado de Pedidos</h3>
+                        <span class="text-[11px] text-gray-500">Últimos pedidos registrados</span>
+                    </div>
+                    <div id="sales-list" class="max-h-80 overflow-y-auto text-xs text-gray-700 space-y-2 pr-1">Cargando...</div>
                 </div>
             </div>
         </div>
@@ -227,12 +232,32 @@
 
     </div>
 
+    <!-- Modal de Cierre de Caja Detallado -->
+    <div id="modal-cierre" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+        <div class="bg-white rounded-xl shadow-xl max-w-2xl w-full p-6 max-h-[90vh] flex flex-col">
+            <div class="flex justify-between items-center border-b pb-3 mb-4">
+                <h3 class="text-lg font-bold text-gray-800">🔒 Resumen de Cierre de Caja (Turno Actual)</h3>
+                <button onclick="cerrarModalCierre()" class="text-gray-400 hover:text-gray-700 text-xl font-bold">&times;</button>
+            </div>
+            
+            <div id="cierre-resumen-contenido" class="overflow-y-auto space-y-4 flex-1 pr-1 text-xs">
+                <!-- Se llena dinámicamente -->
+            </div>
+
+            <div class="border-t pt-4 mt-4 flex justify-end gap-3">
+                <button onclick="cerrarModalCierre()" class="px-4 py-2 rounded border text-gray-600 hover:bg-gray-100 text-xs font-semibold">Cancelar</button>
+                <button onclick="confirmarCierreCaja()" class="px-4 py-2 rounded bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold shadow">Confirmar y Registrar Cierre</button>
+            </div>
+        </div>
+    </div>
+
     <script>
         let reporteFinancieroGlobal = {};
         let listaIngredientesGlobal = [];
         let listaProductosGlobal = [];
+        let listaVentasGlobal = [];
         let productoEditandoId = null;
-        let pedidoActual = []; // Variable global para la comanda
+        let pedidoActual = [];
 
         function verificarReinicioPeriodos() {
             const ahora = new Date();
@@ -249,8 +274,8 @@
             await cargarIngredientes();
             await cargarProductos();
             cargarGastos();
-            cargarVentas();
-            cargarBalance();
+            await cargarVentas();
+            await cargarBalance();
         }
 
         async function cargarIngredientes() {
@@ -286,12 +311,12 @@
         }
 
         async function eliminarInsumo(id) {
-            if (!confirm('¿Seguro que quieres eliminar este insumo? Se desvinculará de cualquier receta que lo esté usando.')) return;
+            if (!confirm('¿Seguro que quieres eliminar este insumo? Se desvinculará de las recetas y se descontará su gasto asociado.')) return;
             
             const res = await fetch(`/ingredients/${id}`, { method: 'DELETE' });
             if (res.ok) {
-                cargarTodo();
-                alert('Insumo eliminado correctamente.');
+                await cargarTodo();
+                alert('Insumo eliminado y gastos recalculados correctamente.');
             } else {
                 alert('Hubo un error al intentar eliminar el insumo.');
             }
@@ -332,7 +357,7 @@
                 document.getElementById('update-ing-unidad').value = '';
                 document.getElementById('update-ing-costo').value = '';
                 document.getElementById('update-ing-stock').value = '';
-                cargarTodo();
+                await cargarTodo();
                 alert('¡Insumo actualizado! Los precios y platos se han recalculado automáticamente.');
             } else {
                 alert('Error al actualizar el insumo.');
@@ -381,13 +406,14 @@
                         <div>
                             <div class="flex justify-between items-start">
                                 <h3 class="font-bold text-gray-800 text-sm">#${p.id} - ${p.nombre}</h3>
+                                <span class="text-[10px] bg-blue-50 text-blue-700 px-2 py-0.5 rounded font-semibold">Vendidos hoy: ${p.vendidos || 0}</span>
                             </div>
                             <div class="mt-2 text-xs bg-gray-50 p-2 rounded border space-y-1">
                                 <div class="flex justify-between"><span>Venta:</span> <b>$${p.precio}</b></div>
                                 <div class="flex justify-between text-red-600"><span>Costo Insumos:</span> <b>-$${p.costo_insumos}</b></div>
                                 <div class="flex justify-between text-green-600 font-bold border-t pt-1"><span>Ganancia Neta:</span> <span>$${p.ganancia_bruta}</span></div>
                             </div>
-                            <div class="mt-2 text-[11px] text-gray-600"><b>Receta Base:</b><ul class="list-disc pl-4">${recetaHtml || 'Sin ingredientes'}</ul></div>
+                            <div class="mt-2 text-[11px] text-gray-600"><b>Receta Base:</b><ul class="list-disc pl-4">${recetaHtml || '<span class="text-red-500 font-semibold">Sin ingredientes activos</span>'}</ul></div>
                         </div>
                         <div class="border-t pt-2 mt-2 flex justify-between items-center text-xs">
                             <button onclick="editarPlatoUI(${p.id})" class="text-blue-500 hover:underline">✏️ Editar Plato</button>
@@ -453,7 +479,7 @@
             
             if (res.ok) {
                 cancelarEdicionPlato();
-                cargarTodo();
+                await cargarTodo();
                 alert(productoEditandoId ? 'Receta actualizada!' : 'Plato creado!');
             }
         }
@@ -461,7 +487,7 @@
         async function eliminarProducto(id) {
             if (!confirm(`¿Eliminar producto #${id}?`)) return;
             const res = await fetch(`/products/${id}`, { method: 'DELETE' });
-            if (res.ok) cargarTodo();
+            if (res.ok) await cargarTodo();
         }
 
         // --- MANEJO DE COMANDAS / CARRITO ---
@@ -484,10 +510,9 @@
             if(prod && prod.receta) {
                 prod.receta.forEach(r => {
                     const ing = r.ingredients;
-                    if(ing) {
+                    if(ing && ing.nombre) {
                         const label = document.createElement('label');
                         label.className = 'flex items-center gap-1 bg-white border border-gray-300 px-2 py-1 rounded cursor-pointer hover:bg-red-50 transition';
-                        // Guardamos el nombre del insumo en data-nombre para mostrarlo visualmente
                         label.innerHTML = `<input type="checkbox" class="chk-excluir" value="${r.ingredient_id}" data-nombre="${ing.nombre}"> <span class="text-red-600 font-bold">Sin</span> ${ing.nombre}`;
                         excluirCont.appendChild(label);
                     }
@@ -523,7 +548,6 @@
 
             const prod = listaProductosGlobal.find(p => p.id == prodId);
             
-            // Recolectar exclusiones
             const excluidos = [];
             const excluidosNombres = [];
             document.querySelectorAll('.chk-excluir:checked').forEach(cb => {
@@ -531,7 +555,6 @@
                 excluidosNombres.push(cb.getAttribute('data-nombre'));
             });
             
-            // Recolectar extras
             const extras = [];
             const extrasDesc = [];
             document.querySelectorAll('#extras-items > div').forEach(fila => {
@@ -546,20 +569,24 @@
                 }
             });
 
-            // Guardar en la variable global del pedido
+            // Validar que el plato tenga al menos un insumo activo para prepararse
+            const insumosBaseActivos = (prod.receta || []).filter(r => r.ingredients && r.ingredients.nombre && !excluidos.includes(r.ingredient_id));
+            if (insumosBaseActivos.length === 0 && extras.length === 0) {
+                alert(`⚠️ No puedes agregar "${prod.nombre}" porque no tiene ningún insumo activo (quitaste todos sus ingredientes).`);
+                return;
+            }
+
             pedidoActual.push({
                 product_id: parseInt(prodId),
                 cantidad: cant,
                 excluidos: excluidos,
                 extras: extras,
                 nombrePlato: prod.nombre,
-                // Texto de ayuda visual para el cajero
                 descPersonalizacion: (excluidosNombres.length ? `<span class="text-red-500 font-bold">Sin:</span> ${excluidosNombres.join(', ')}` : '') + 
                                      (excluidosNombres.length && extrasDesc.length ? ' | ' : '') + 
                                      (extrasDesc.length ? `<span class="text-green-600 font-bold">Extra:</span> ${extrasDesc.join(', ')}` : '')
             });
 
-            // Limpiar formulario individual
             document.getElementById('s-product-id').value = '';
             document.getElementById('s-cantidad').value = '1';
             document.getElementById('opciones-personalizacion').classList.add('hidden');
@@ -604,7 +631,6 @@
                 return;
             }
 
-            // Construir JSON mapeando nuestra variable visual al formato que exige el BackEnd
             const data = {
                 items: pedidoActual.map(p => ({
                     product_id: p.product_id,
@@ -629,9 +655,9 @@
             if (res.ok) {
                 alert(`✅ Venta procesada con éxito.\nTotal Cobrado: $${r.total_cobrado}`);
                 document.getElementById('sale-form').reset();
-                pedidoActual = []; // Vaciar carrito
+                pedidoActual = [];
                 renderizarPedido();
-                cargarTodo();
+                await cargarTodo();
             } else {
                 alert('Error: ' + (r.detail || 'Problema procesando venta. Verifica el stock.'));
             }
@@ -650,14 +676,14 @@
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(data)
             });
-            if (res.ok) { document.getElementById('ingredient-form').reset(); cargarTodo(); }
+            if (res.ok) { document.getElementById('ingredient-form').reset(); await cargarTodo(); }
         }
 
         async function registrarGasto(event) {
             event.preventDefault();
             const data = { descripcion: document.getElementById('e-desc').value, monto: parseFloat(document.getElementById('e-monto').value) };
             const res = await fetch('/gastos', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
-            if (res.ok) { document.getElementById('expense-form').reset(); cargarTodo(); }
+            if (res.ok) { document.getElementById('expense-form').reset(); await cargarTodo(); }
         }
 
         async function cargarBalance() {
@@ -683,31 +709,112 @@
 
         async function cargarVentas() {
             try {
-                const ventas = await (await fetch('/sales')).json();
+                listaVentasGlobal = await (await fetch('/sales')).json();
                 const cont = document.getElementById('sales-list');
                 cont.innerHTML = '';
-                if(!ventas || ventas.length===0) { cont.innerHTML = 'Sin cobros.'; return; }
-                ventas.slice(0,10).forEach(v => {
-                    cont.innerHTML += `<div class="border-b pb-1 mb-1">
-                        <div class="flex justify-between font-bold"><span>Venta #${v.id} - ${v.cliente_nombre}</span><span class="text-green-600">+$${v.total}</span></div>
-                        <div class="text-[10px] text-gray-500">Por: ${v.registrado_por}</div>
-                    </div>`;
+                if(!listaVentasGlobal || listaVentasGlobal.length === 0) {
+                    cont.innerHTML = '<div class="text-gray-400 italic">Sin pedidos registrados.</div>';
+                    return;
+                }
+
+                listaVentasGlobal.slice(0, 20).forEach(v => {
+                    const fechaStr = v.created_at ? new Date(v.created_at).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' }) : '';
+                    const platosHtml = (v.detalles_pedido || []).map(item => `<li>• ${item}</li>`).join('');
+                    const tel = v.cliente_telefono ? `📞 ${v.cliente_telefono}` : '📞 Sin tel.';
+                    const dir = v.cliente_direccion ? `📍 ${v.cliente_direccion}` : '📍 Recoge / Sin dir.';
+
+                    cont.innerHTML += `
+                        <div class="border rounded-lg p-2.5 bg-gray-50 hover:bg-white transition shadow-xs space-y-1">
+                            <div class="flex justify-between items-center border-b pb-1">
+                                <div>
+                                    <span class="font-bold text-gray-800">#${v.id} - ${v.cliente_nombre || 'Cliente'}</span>
+                                    <span class="text-[10px] text-gray-400 ml-1">${fechaStr}</span>
+                                </div>
+                                <div class="flex items-center gap-1.5">
+                                    <span class="text-[10px] px-1.5 py-0.5 rounded bg-purple-100 text-purple-800 font-semibold">${v.metodo_pago || 'Efectivo'}</span>
+                                    <span class="font-bold text-green-600 text-sm">+$${v.total}</span>
+                                </div>
+                            </div>
+                            <div class="text-[11px] text-gray-600 flex flex-wrap gap-x-3 gap-y-0.5">
+                                <span>${tel}</span>
+                                <span>${dir}</span>
+                            </div>
+                            <div class="bg-white border rounded p-1.5 text-[11px] text-gray-800">
+                                <b class="text-[10px] text-gray-500 uppercase block mb-0.5">Pedido:</b>
+                                <ul class="space-y-0.5 font-medium">${platosHtml}</ul>
+                            </div>
+                            <div class="text-[10px] text-gray-400 text-right">Atendió: <b>${v.registrado_por || 'Cajero'}</b></div>
+                        </div>
+                    `;
                 });
-            } catch (e) {}
+            } catch (e) { console.error(e); }
         }
         
         async function cargarGastos() {
             try {
-                const gastos = await (await fetch('/gastos')).json();
-                const cont = document.getElementById('expenses-list');
-                if(cont) {}
+                await (await fetch('/gastos')).json();
             } catch (e) {}
         }
 
-        async function cierreDeCajaDiario() {
-            const data = reporteFinancieroGlobal['diario'] || {ingresos:0, gastos:0, ganancia:0};
-            if (confirm(`🔒 Cierre de Caja\nIngresos: $${data.ingresos}\nGanancia: $${data.ganancia}\n\n¿Registrar corte?`)) {
-                if ((await fetch('/cierre-caja', {method: 'POST'})).ok) { alert('✅ Cierre registrado!'); cargarTodo(); }
+        function abrirModalCierreCaja() {
+            const data = reporteFinancieroGlobal['diario'] || { ingresos: 0, gastos: 0, ganancia: 0 };
+            const ventasTurno = (listaVentasGlobal || []).filter(v => v.turno_actual);
+
+            // Agrupar totales por método de pago
+            const porMetodo = {};
+            ventasTurno.forEach(v => {
+                const m = v.metodo_pago || 'Efectivo';
+                porMetodo[m] = (porMetodo[m] || 0) + parseFloat(v.total || 0);
+            });
+
+            const metodosHtml = Object.keys(porMetodo).length > 0
+                ? Object.entries(porMetodo).map(([m, tot]) => `<div class="flex justify-between border-b py-1"><span>${m}:</span><b>$${tot}</b></div>`).join('')
+                : '<div class="text-gray-400 italic">Sin ventas en este turno.</div>';
+
+            const listaDetalleHtml = ventasTurno.length > 0
+                ? ventasTurno.map(v => `
+                    <div class="border rounded p-2 bg-gray-50 space-y-1">
+                        <div class="flex justify-between font-bold">
+                            <span>#${v.id} - ${v.cliente_nombre} (${v.metodo_pago || 'Efectivo'})</span>
+                            <span class="text-green-600">$${v.total}</span>
+                        </div>
+                        <div class="text-[11px] text-gray-600">📞 ${v.cliente_telefono || '-'} | 📍 ${v.cliente_direccion || '-'}</div>
+                        <div class="text-[11px] text-gray-800 font-medium">${(v.detalles_pedido || []).join(' , ')}</div>
+                    </div>
+                `).join('')
+                : '<div class="text-gray-400 italic">No hay pedidos registrados en el turno actual.</div>';
+
+            document.getElementById('cierre-resumen-contenido').innerHTML = `
+                <div class="grid grid-cols-3 gap-2 text-center bg-amber-50 p-3 rounded border border-amber-200">
+                    <div><span class="block text-gray-500 text-[11px]">Ingresos Turno</span><b class="text-green-600 text-sm">$${data.ingresos}</b></div>
+                    <div><span class="block text-gray-500 text-[11px]">Gastos + Insumos</span><b class="text-red-600 text-sm">$${data.gastos}</b></div>
+                    <div><span class="block text-gray-500 text-[11px]">Ganancia Neta</span><b class="text-blue-600 text-sm">$${data.ganancia}</b></div>
+                </div>
+                <div>
+                    <h4 class="font-bold text-gray-700 mb-1">💳 Cómo se vendió (Por Método de Pago):</h4>
+                    <div class="bg-white border rounded p-2.5 space-y-1">${metodosHtml}</div>
+                </div>
+                <div>
+                    <h4 class="font-bold text-gray-700 mb-1">🍔 Qué se vendió en el turno (${ventasTurno.length} pedidos):</h4>
+                    <div class="space-y-2 max-h-60 overflow-y-auto">${listaDetalleHtml}</div>
+                </div>
+            `;
+
+            document.getElementById('modal-cierre').classList.remove('hidden');
+        }
+
+        function cerrarModalCierre() {
+            document.getElementById('modal-cierre').classList.add('hidden');
+        }
+
+        async function confirmarCierreCaja() {
+            const res = await fetch('/cierre-caja', { method: 'POST' });
+            if (res.ok) {
+                cerrarModalCierre();
+                alert('✅ Cierre de caja registrado con éxito.');
+                await cargarTodo();
+            } else {
+                alert('Error al registrar el cierre de caja.');
             }
         }
     </script>
