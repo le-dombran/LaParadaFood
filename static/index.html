@@ -14,7 +14,7 @@
             <div class="flex flex-col md:flex-row justify-between items-center gap-4">
                 <div>
                     <h1 class="text-3xl font-bold text-gray-800">🍔 La Parada Food</h1>
-                    <p class="text-gray-600 text-sm">Control financiero, Inventario, Recetas y Pedidos</p>
+                    <p class="text-gray-600 text-sm">Control financiero, Inventario por Gramaje/Unidades, Recetas y Pedidos</p>
                 </div>
                 <div class="flex flex-wrap items-center gap-3">
                     <div class="flex bg-gray-200 p-1 rounded-lg text-xs font-semibold">
@@ -50,45 +50,92 @@
 
         <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
             
-            <!-- 1. Registrar y Editar Insumo -->
-            <div class="bg-white shadow rounded-lg p-6 space-y-6">
+            <!-- 1. Registrar y Editar Insumo (Con Calculadora de Gramaje / Bolsa Común) -->
+            <div class="bg-white shadow rounded-lg p-6 space-y-5">
                 <div>
-                    <h2 class="text-xl font-semibold mb-4 text-gray-700">🥬 Registrar Insumo Base</h2>
+                    <h2 class="text-xl font-semibold mb-3 text-gray-700">🥬 Registrar Insumo Base</h2>
                     <form id="ingredient-form" onsubmit="guardarIngrediente(event)" class="space-y-3">
                         <div>
-                            <input type="text" id="ing-nombre" required placeholder="Nombre (Ej: Pan, Salchicha)" class="w-full border rounded p-2 text-sm">
+                            <label class="block text-[11px] font-semibold text-gray-600 mb-0.5">Nombre del Insumo</label>
+                            <input type="text" id="ing-nombre" required placeholder="Ej: Carne de Res, Papas, Pan Perro" class="w-full border rounded p-2 text-sm">
                         </div>
-                        <div class="grid grid-cols-2 gap-2">
-                            <input type="text" id="ing-unidad" required placeholder="Unidad (Ej: gr, un)" class="w-full border rounded p-2 text-sm">
-                            <input type="number" step="any" id="ing-costo" required placeholder="Costo x Unidad ($)" class="w-full border rounded p-2 text-sm">
-                        </div>
+
                         <div>
-                            <input type="number" step="any" id="ing-stock" required placeholder="Stock Inicial" class="w-full border rounded p-2 text-sm" value="0">
+                            <label class="block text-[11px] font-semibold text-gray-600 mb-0.5">Tipo de Medida</label>
+                            <select id="ing-unidad" onchange="actualizarEtiquetasCalculadora()" class="w-full border rounded p-2 text-xs bg-white font-semibold text-gray-700">
+                                <option value="gr">⚖️ Gramos (gr) - Bolsa común (Carnes, Papas, Queso)</option>
+                                <option value="un">🥖 Unidades Fijas (un) - Pan, Salchicha, Bebidas</option>
+                            </select>
                         </div>
+
+                        <!-- Calculadora Automática de Bolsa / Paquete -->
+                        <div class="bg-blue-50 border border-blue-200 rounded-lg p-2.5 space-y-2">
+                            <div class="flex justify-between items-center">
+                                <span class="text-[11px] font-bold text-blue-800">🧮 Calculadora de Compra (Opcional)</span>
+                                <span class="text-[10px] text-blue-600">Calcula costo x <span id="lbl-calc-unidad">gr</span></span>
+                            </div>
+                            <div class="grid grid-cols-2 gap-2">
+                                <div>
+                                    <label class="block text-[10px] text-gray-600">Cant. Comprada (<span class="lbl-unidad-txt">gr</span>)</label>
+                                    <input type="number" step="any" id="calc-cantidad-total" oninput="calcularCostoPorGramo()" placeholder="Ej: 1000" class="w-full border bg-white rounded p-1.5 text-xs">
+                                </div>
+                                <div>
+                                    <label class="block text-[10px] text-gray-600">Precio Total Pagado ($)</label>
+                                    <input type="number" step="any" id="calc-precio-total" oninput="calcularCostoPorGramo()" placeholder="Ej: 32000" class="w-full border bg-white rounded p-1.5 text-xs">
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-2">
+                            <div>
+                                <label class="block text-[11px] font-semibold text-gray-600 mb-0.5">Costo x 1 <span class="lbl-unidad-txt">gr</span> ($)</label>
+                                <input type="number" step="any" id="ing-costo" required placeholder="Ej: 32" class="w-full border rounded p-2 text-sm bg-gray-50 font-bold text-blue-700">
+                            </div>
+                            <div>
+                                <label class="block text-[11px] font-semibold text-gray-600 mb-0.5">Stock Inicial (<span class="lbl-unidad-txt">gr</span>)</label>
+                                <input type="number" step="any" id="ing-stock" required placeholder="Ej: 1000" class="w-full border rounded p-2 text-sm bg-gray-50 font-bold" value="0">
+                            </div>
+                        </div>
+
                         <button type="submit" class="w-full bg-blue-600 text-white py-2 rounded font-semibold hover:bg-blue-700 text-sm">Guardar Insumo Nuevo</button>
                     </form>
                 </div>
 
-                <!-- Edición Completa de Insumos -->
-                <div class="border-t pt-4 bg-gray-50 p-3 rounded">
-                    <h3 class="text-sm font-bold text-gray-700 mb-2">✏️ Editar Insumo Existente</h3>
-                    <div class="space-y-2">
-                        <select id="update-ing-id" onchange="cargarDatosInsumo()" class="w-full border rounded p-1.5 text-xs">
-                            <option value="">Seleccione insumo para modificar...</option>
-                        </select>
-                        <div class="grid grid-cols-2 gap-2">
-                            <input type="text" id="update-ing-nombre" placeholder="Nuevo Nombre" class="border rounded p-1.5 text-xs">
-                            <input type="text" id="update-ing-unidad" placeholder="Nueva Unidad" class="border rounded p-1.5 text-xs">
-                            <input type="number" step="any" id="update-ing-costo" placeholder="Nuevo Costo ($)" class="border rounded p-1.5 text-xs">
-                            <input type="number" step="any" id="update-ing-stock" placeholder="Nuevo Stock" class="border rounded p-1.5 text-xs">
+                <!-- Edición y Reabastecimiento de Insumos -->
+                <div class="border-t pt-4 bg-gray-50 p-3 rounded space-y-2">
+                    <h3 class="text-sm font-bold text-gray-700">✏️ Editar / Recargar Insumo</h3>
+                    <select id="update-ing-id" onchange="cargarDatosInsumo()" class="w-full border rounded p-1.5 text-xs bg-white">
+                        <option value="">Seleccione insumo para modificar...</option>
+                    </select>
+
+                    <!-- Mini calculadora para sumar una bolsa nueva al stock existente -->
+                    <div id="box-recarga-rapida" class="hidden bg-indigo-50 border border-indigo-200 rounded p-2 space-y-1.5">
+                        <span class="block text-[10px] font-bold text-indigo-800">➕ Sumar nueva bolsa/compra al stock actual:</span>
+                        <div class="grid grid-cols-3 gap-1.5 items-center">
+                            <input type="number" step="any" id="recarga-cant" placeholder="+ Cant (gr/un)" class="border bg-white rounded p-1 text-xs">
+                            <input type="number" step="any" id="recarga-precio" placeholder="$ Pagado" class="border bg-white rounded p-1 text-xs">
+                            <button type="button" onclick="aplicarRecargaBolsa()" class="bg-indigo-100 hover:bg-indigo-200 text-indigo-800 border border-indigo-300 rounded py-1 px-1.5 text-[10px] font-bold">Calcular y Sumar</button>
                         </div>
-                        <button type="button" onclick="actualizarInsumoCompleto()" class="w-full bg-indigo-600 text-white py-1.5 rounded font-semibold hover:bg-indigo-700 text-xs">Actualizar Datos de Insumo</button>
                     </div>
+
+                    <div class="grid grid-cols-2 gap-2">
+                        <input type="text" id="update-ing-nombre" placeholder="Nombre" class="border rounded p-1.5 text-xs bg-white">
+                        <input type="text" id="update-ing-unidad" placeholder="Unidad (gr, ml, un)" class="border rounded p-1.5 text-xs bg-white">
+                        <div>
+                            <label class="block text-[10px] text-gray-500">Costo Unitario ($)</label>
+                            <input type="number" step="any" id="update-ing-costo" placeholder="Costo ($)" class="w-full border rounded p-1.5 text-xs bg-white">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] text-gray-500">Stock Total Actual</label>
+                            <input type="number" step="any" id="update-ing-stock" placeholder="Stock" class="w-full border rounded p-1.5 text-xs bg-white">
+                        </div>
+                    </div>
+                    <button type="button" onclick="actualizarInsumoCompleto()" class="w-full bg-indigo-600 text-white py-1.5 rounded font-semibold hover:bg-indigo-700 text-xs">Actualizar Datos de Insumo</button>
                 </div>
 
                 <div class="border-t pt-3">
-                    <h3 class="text-xs font-bold text-gray-600 mb-1">Insumos Registrados:</h3>
-                    <div id="ingredients-list" class="max-h-32 overflow-y-auto text-xs text-gray-600 space-y-1">Cargando...</div>
+                    <h3 class="text-xs font-bold text-gray-600 mb-1">Insumos Registrados (Bolsa Común y Fijos):</h3>
+                    <div id="ingredients-list" class="max-h-36 overflow-y-auto text-xs text-gray-600 space-y-1">Cargando...</div>
                 </div>
             </div>
 
@@ -102,7 +149,7 @@
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div>
                             <label class="block text-xs font-medium text-gray-700">Nombre del Plato</label>
-                            <input type="text" id="p-nombre" required placeholder="Ej: Perro Caliente Especial" class="w-full border rounded p-2 text-sm">
+                            <input type="text" id="p-nombre" required placeholder="Ej: Hamburguesa Artesanal" class="w-full border rounded p-2 text-sm">
                         </div>
                         <div>
                             <label class="block text-xs font-medium text-gray-700">Precio Venta ($)</label>
@@ -111,12 +158,15 @@
                     </div>
                     <div>
                         <label class="block text-xs font-medium text-gray-700">Categoría</label>
-                        <input type="text" id="p-categoria" required placeholder="Ej: Perros Calientes" class="w-full border rounded p-2 text-sm">
+                        <input type="text" id="p-categoria" required placeholder="Ej: Hamburguesas" class="w-full border rounded p-2 text-sm">
                     </div>
 
-                    <!-- Constructor de Receta -->
+                    <!-- Constructor de Receta con Previsualización de Costo por Gramaje -->
                     <div class="border p-3 rounded-lg bg-gray-50">
-                        <h3 class="text-xs font-bold text-gray-700 mb-2">Ingredientes que lleva este plato (Receta Base):</h3>
+                        <div class="flex justify-between items-center mb-2">
+                            <h3 class="text-xs font-bold text-gray-700">Ingredientes que usa este plato (Gramos, ml o Unidades):</h3>
+                            <span id="preview-costo-receta" class="text-xs font-bold text-red-600 bg-red-50 px-2 py-0.5 rounded border border-red-200">Costo Receta: $0</span>
+                        </div>
                         <div id="recipe-items" class="space-y-2 mb-2"></div>
                         <button type="button" onclick="agregarFilaReceta()" class="text-xs bg-gray-200 hover:bg-gray-300 text-gray-800 px-3 py-1 rounded font-semibold">+ Agregar Insumo a la Receta</button>
                     </div>
@@ -151,7 +201,7 @@
                         <h4 class="text-[11px] font-bold text-gray-700 mb-1">❌ El cliente NO quiere (Excluir):</h4>
                         <div id="excluir-items" class="flex flex-wrap gap-2 text-xs mb-3"></div>
                         
-                        <h4 class="text-[11px] font-bold text-gray-700 mb-1">➕ Extras Adicionales (Se cobran aparte):</h4>
+                        <h4 class="text-[11px] font-bold text-gray-700 mb-1">➕ Extras Adicionales (Gramos o Unidades extra):</h4>
                         <div id="extras-items" class="space-y-2 mb-2"></div>
                         <button type="button" onclick="agregarExtraVenta()" class="text-[10px] bg-white border shadow-sm text-gray-800 px-2 py-1 rounded font-bold">+ Añadir Ingrediente Extra</button>
                     </div>
@@ -202,19 +252,19 @@
                 <div>
                     <h2 class="text-xl font-semibold mb-4 text-gray-700">💸 Registrar Gasto</h2>
                     <form id="expense-form" onsubmit="registrarGasto(event)" class="space-y-3">
-                        <input type="text" id="e-desc" required placeholder="Descripción (Ej: Gas, Arriendo)" class="w-full border rounded p-2 text-sm">
+                        <input type="text" id="e-desc" required placeholder="Descripción (Ej: Gas, Arriendo, Domicilio)" class="w-full border rounded p-2 text-sm">
                         <input type="number" step="any" id="e-monto" required placeholder="Monto ($)" class="w-full border rounded p-2 text-sm">
                         <button type="submit" class="w-full bg-red-600 text-white py-2 rounded font-semibold hover:bg-red-700 text-sm">Guardar Gasto</button>
                     </form>
                 </div>
 
-                <!-- Historial Detallado de Pedidos -->
+                <!-- Historial Detallado de Pedidos con Cancelación Total y Parcial -->
                 <div class="mt-6 border-t pt-4 flex-1 flex flex-col">
                     <div class="flex justify-between items-center mb-2">
-                        <h3 class="text-sm font-bold text-gray-700">🧾 Historial Detallado de Pedidos</h3>
-                        <span class="text-[11px] text-gray-500">Últimos pedidos registrados</span>
+                        <h3 class="text-sm font-bold text-gray-700">🧾 Historial y Control de Pedidos</h3>
+                        <span class="text-[11px] text-gray-500">Permite anular plato o pedido</span>
                     </div>
-                    <div id="sales-list" class="max-h-80 overflow-y-auto text-xs text-gray-700 space-y-2 pr-1">Cargando...</div>
+                    <div id="sales-list" class="max-h-96 overflow-y-auto text-xs text-gray-700 space-y-2.5 pr-1">Cargando...</div>
                 </div>
             </div>
         </div>
@@ -222,7 +272,7 @@
         <!-- Menú, Costos y % de Margen por Plato -->
         <div class="bg-white shadow rounded-lg p-6">
             <div class="flex justify-between items-center mb-4">
-                <h2 class="text-xl font-semibold text-gray-700">📋 Menú, Costos y Rentabilidad Actual</h2>
+                <h2 class="text-xl font-semibold text-gray-700">📋 Menú, Costos por Gramaje y Rentabilidad Actual</h2>
                 <button onclick="cargarTodo()" class="text-sm text-blue-600 hover:underline">Actualizar Vista</button>
             </div>
             <div id="product-list" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -240,9 +290,7 @@
                 <button onclick="cerrarModalCierre()" class="text-gray-400 hover:text-gray-700 text-xl font-bold">&times;</button>
             </div>
             
-            <div id="cierre-resumen-contenido" class="overflow-y-auto space-y-4 flex-1 pr-1 text-xs">
-                <!-- Se llena dinámicamente -->
-            </div>
+            <div id="cierre-resumen-contenido" class="overflow-y-auto space-y-4 flex-1 pr-1 text-xs"></div>
 
             <div class="border-t pt-4 mt-4 flex justify-end gap-3">
                 <button onclick="cerrarModalCierre()" class="px-4 py-2 rounded border text-gray-600 hover:bg-gray-100 text-xs font-semibold">Cancelar</button>
@@ -261,12 +309,9 @@
 
         function verificarReinicioPeriodos() {
             const ahora = new Date();
-            const mesActual = ahora.getMonth();
-            const trimActual = Math.floor(mesActual / 3);
-            const anioActual = ahora.getFullYear();
-            localStorage.setItem('lk_ultimo_mes', mesActual);
-            localStorage.setItem('lk_ultimo_trimestre', trimActual);
-            localStorage.setItem('lk_ultimo_anio', anioActual);
+            localStorage.setItem('lk_ultimo_mes', ahora.getMonth());
+            localStorage.setItem('lk_ultimo_trimestre', Math.floor(ahora.getMonth() / 3));
+            localStorage.setItem('lk_ultimo_anio', ahora.getFullYear());
         }
 
         async function cargarTodo() {
@@ -278,6 +323,50 @@
             await cargarBalance();
         }
 
+        // --- CALCULADORA DE GRAMAJE Y BOLSA COMÚN ---
+
+        function actualizarEtiquetasCalculadora() {
+            const unidad = document.getElementById('ing-unidad').value;
+            document.getElementById('lbl-calc-unidad').innerText = unidad;
+            document.querySelectorAll('.lbl-unidad-txt').forEach(el => el.innerText = unidad);
+            calcularCostoPorGramo();
+        }
+
+        function calcularCostoPorGramo() {
+            const cantTotal = parseFloat(document.getElementById('calc-cantidad-total').value);
+            const precioTotal = parseFloat(document.getElementById('calc-precio-total').value);
+
+            if (!isNaN(cantTotal) && cantTotal > 0) {
+                document.getElementById('ing-stock').value = cantTotal;
+                if (!isNaN(precioTotal) && precioTotal >= 0) {
+                    const costoUnit = precioTotal / cantTotal;
+                    document.getElementById('ing-costo').value = Math.round(costoUnit * 10000) / 10000;
+                }
+            }
+        }
+
+        function aplicarRecargaBolsa() {
+            const id = document.getElementById('update-ing-id').value;
+            if (!id) return;
+            const cantNueva = parseFloat(document.getElementById('recarga-cant').value);
+            const precioNuevo = parseFloat(document.getElementById('recarga-precio').value);
+            const stockActual = parseFloat(document.getElementById('update-ing-stock').value) || 0;
+
+            if (isNaN(cantNueva) || cantNueva <= 0) {
+                alert('Ingresa una cantidad válida a sumar (ej. 1000 para 1000 gr).');
+                return;
+            }
+
+            document.getElementById('update-ing-stock').value = Math.round((stockActual + cantNueva) * 10000) / 10000;
+            if (!isNaN(precioNuevo) && precioNuevo > 0) {
+                document.getElementById('update-ing-costo').value = Math.round((precioNuevo / cantNueva) * 10000) / 10000;
+            }
+            document.getElementById('recarga-cant').value = '';
+            document.getElementById('recarga-precio').value = '';
+        }
+
+        // --- INGREDIENTES ---
+
         async function cargarIngredientes() {
             try {
                 const res = await fetch('/ingredients');
@@ -286,15 +375,17 @@
                 const contenedor = document.getElementById('ingredients-list');
                 contenedor.innerHTML = '';
                 if (!listaIngredientesGlobal || listaIngredientesGlobal.length === 0) {
-                    contenedor.innerHTML = '<span>Sin insumos.</span>';
+                    contenedor.innerHTML = '<span>Sin insumos registrados.</span>';
                 } else {
                     listaIngredientesGlobal.forEach(i => {
+                        const valorBolsa = Math.round((parseFloat(i.stock_actual || 0) * parseFloat(i.costo_unitario || 0)));
                         const div = document.createElement('div');
                         div.className = 'flex justify-between items-center border-b pb-1 mb-1';
                         div.innerHTML = `
                             <div class="flex-1">
-                                <span>${i.nombre} (${i.unidad_medida}) - Stock: <b>${i.stock_actual}</b></span>
-                                <span class="font-bold text-blue-600 ml-2">$${i.costo_unitario}</span>
+                                <span><b>${i.nombre}</b> - Stock: <b class="text-gray-800">${i.stock_actual} ${i.unidad_medida}</b></span>
+                                <span class="font-bold text-blue-600 ml-1">($${i.costo_unitario}/${i.unidad_medida})</span>
+                                <span class="text-[10px] text-gray-400 ml-1">[Valor: $${valorBolsa}]</span>
                             </div>
                             <button onclick="eliminarInsumo(${i.id})" class="text-red-500 font-bold hover:underline text-[11px] ml-2">Eliminar</button>
                         `;
@@ -305,7 +396,7 @@
                 const selectUpdate = document.getElementById('update-ing-id');
                 selectUpdate.innerHTML = '<option value="">Seleccione insumo para modificar...</option>';
                 listaIngredientesGlobal.forEach(i => {
-                    selectUpdate.appendChild(new Option(`${i.nombre} (Stock: ${i.stock_actual})`, i.id));
+                    selectUpdate.appendChild(new Option(`${i.nombre} (${i.stock_actual} ${i.unidad_medida} a $${i.costo_unitario}/${i.unidad_medida})`, i.id));
                 });
             } catch (e) { console.error(e); }
         }
@@ -324,9 +415,14 @@
 
         function cargarDatosInsumo() {
             const id = document.getElementById('update-ing-id').value;
-            if(!id) return;
+            const boxRecarga = document.getElementById('box-recarga-rapida');
+            if(!id) {
+                boxRecarga.classList.add('hidden');
+                return;
+            }
             const ing = listaIngredientesGlobal.find(i => i.id == id);
             if(ing) {
+                boxRecarga.classList.remove('hidden');
                 document.getElementById('update-ing-nombre').value = ing.nombre;
                 document.getElementById('update-ing-unidad').value = ing.unidad_medida;
                 document.getElementById('update-ing-costo').value = ing.costo_unitario;
@@ -357,29 +453,52 @@
                 document.getElementById('update-ing-unidad').value = '';
                 document.getElementById('update-ing-costo').value = '';
                 document.getElementById('update-ing-stock').value = '';
+                document.getElementById('box-recarga-rapida').classList.add('hidden');
                 await cargarTodo();
-                alert('¡Insumo actualizado! Los precios y platos se han recalculado automáticamente.');
+                alert('¡Insumo actualizado! Los costos de las recetas se han recalculado.');
             } else {
                 alert('Error al actualizar el insumo.');
             }
         }
+
+        // --- PRODUCTOS Y RECETAS CON PREVISUALIZACIÓN EN TIEMPO REAL ---
 
         function agregarFilaReceta(ingId = '', cant = '') {
             const contenedor = document.getElementById('recipe-items');
             const div = document.createElement('div');
             div.className = 'flex gap-2 items-center';
             
-            let opciones = listaIngredientesGlobal.map(i => `<option value="${i.id}" ${i.id == ingId ? 'selected' : ''}>${i.nombre} ($${i.costo_unitario}/${i.unidad_medida})</option>`).join('');
+            let opciones = listaIngredientesGlobal.map(i => `<option value="${i.id}" ${i.id == ingId ? 'selected' : ''}>${i.nombre} ($${i.costo_unitario} por ${i.unidad_medida})</option>`).join('');
             
             div.innerHTML = `
-                <select class="recipe-ing border rounded p-1.5 text-xs flex-1" required>
+                <select onchange="recalcularPreviewReceta()" class="recipe-ing border rounded p-1.5 text-xs flex-1 bg-white" required>
                     <option value="">Seleccione insumo...</option>
                     ${opciones}
                 </select>
-                <input type="number" step="any" class="recipe-cant border rounded p-1.5 text-xs w-24" placeholder="Cant." required value="${cant || 1}">
-                <button type="button" onclick="this.parentElement.remove()" class="text-red-500 font-bold text-xs px-2">X</button>
+                <input type="number" step="any" oninput="recalcularPreviewReceta()" class="recipe-cant border rounded p-1.5 text-xs w-28 bg-white" placeholder="Cant. (gr/un)" required value="${cant || 1}">
+                <span class="recipe-subtotal text-[11px] font-bold text-gray-600 w-20 text-right">$0</span>
+                <button type="button" onclick="this.parentElement.remove(); recalcularPreviewReceta();" class="text-red-500 font-bold text-xs px-2">X</button>
             `;
             contenedor.appendChild(div);
+            recalcularPreviewReceta();
+        }
+
+        function recalcularPreviewReceta() {
+            let totalCosto = 0;
+            document.querySelectorAll('#recipe-items > div').forEach(fila => {
+                const ingId = fila.querySelector('.recipe-ing').value;
+                const cant = parseFloat(fila.querySelector('.recipe-cant').value) || 0;
+                const spanSub = fila.querySelector('.recipe-subtotal');
+                const ing = listaIngredientesGlobal.find(i => i.id == ingId);
+                if (ing && cant > 0) {
+                    const sub = Math.round(cant * parseFloat(ing.costo_unitario) * 100) / 100;
+                    totalCosto += sub;
+                    spanSub.innerText = `$${sub}`;
+                } else {
+                    spanSub.innerText = '$0';
+                }
+            });
+            document.getElementById('preview-costo-receta').innerText = `Costo Receta: $${Math.round(totalCosto * 100) / 100}`;
         }
 
         async function cargarProductos() {
@@ -400,7 +519,15 @@
 
                     const tarjeta = document.createElement('div');
                     tarjeta.className = 'border rounded-lg p-4 shadow-sm bg-white flex flex-col justify-between';
-                    let recetaHtml = p.receta.map(r => `<li class="text-gray-500">${r.cantidad_usada} x ${r.ingredients ? r.ingredients.nombre : 'Insumo'}</li>`).join('');
+                    let recetaHtml = p.receta.map(r => {
+                        const ing = r.ingredients;
+                        const unidad = ing ? ing.unidad_medida : '';
+                        const costoLinea = ing ? Math.round(r.cantidad_usada * ing.costo_unitario * 100) / 100 : 0;
+                        return `<li class="text-gray-600 flex justify-between">
+                            <span>• ${r.cantidad_usada}${unidad} ${ing ? ing.nombre : 'Insumo'}</span>
+                            <span class="text-gray-400">$${costoLinea}</span>
+                        </li>`;
+                    }).join('');
 
                     tarjeta.innerHTML = `
                         <div>
@@ -410,12 +537,15 @@
                             </div>
                             <div class="mt-2 text-xs bg-gray-50 p-2 rounded border space-y-1">
                                 <div class="flex justify-between"><span>Venta:</span> <b>$${p.precio}</b></div>
-                                <div class="flex justify-between text-red-600"><span>Costo Insumos:</span> <b>-$${p.costo_insumos}</b></div>
-                                <div class="flex justify-between text-green-600 font-bold border-t pt-1"><span>Ganancia Neta:</span> <span>$${p.ganancia_bruta}</span></div>
+                                <div class="flex justify-between text-red-600"><span>Costo Según Gramaje/Unid:</span> <b>-$${p.costo_insumos}</b></div>
+                                <div class="flex justify-between text-green-600 font-bold border-t pt-1"><span>Ganancia Neta:</span> <span>$${p.ganancia_bruta} (${p.margen_bruto_pct}%)</span></div>
                             </div>
-                            <div class="mt-2 text-[11px] text-gray-600"><b>Receta Base:</b><ul class="list-disc pl-4">${recetaHtml || '<span class="text-red-500 font-semibold">Sin ingredientes activos</span>'}</ul></div>
+                            <div class="mt-2 text-[11px] text-gray-600">
+                                <b>Desglose de Receta:</b>
+                                <ul class="mt-1 space-y-0.5">${recetaHtml || '<span class="text-red-500 font-semibold">Sin ingredientes activos</span>'}</ul>
+                            </div>
                         </div>
-                        <div class="border-t pt-2 mt-2 flex justify-between items-center text-xs">
+                        <div class="border-t pt-2 mt-3 flex justify-between items-center text-xs">
                             <button onclick="editarPlatoUI(${p.id})" class="text-blue-500 hover:underline">✏️ Editar Plato</button>
                             <button onclick="eliminarProducto(${p.id})" class="text-red-500 hover:underline">Eliminar</button>
                         </div>
@@ -440,6 +570,7 @@
             
             document.getElementById('recipe-items').innerHTML = '';
             prod.receta.forEach(r => agregarFilaReceta(r.ingredient_id, r.cantidad_usada));
+            recalcularPreviewReceta();
             window.scrollTo({ top: 0, behavior: 'smooth' });
         }
 
@@ -447,6 +578,7 @@
             productoEditandoId = null;
             document.getElementById('product-form').reset();
             document.getElementById('recipe-items').innerHTML = '';
+            document.getElementById('preview-costo-receta').innerText = 'Costo Receta: $0';
             document.getElementById('titulo-form-plato').innerText = '➕ Crear Plato / Receta';
             document.getElementById('btn-guardar-prod').innerText = 'Guardar Plato y Calcular Costos';
             document.getElementById('btn-cancelar-edicion').classList.add('hidden');
@@ -513,7 +645,7 @@
                     if(ing && ing.nombre) {
                         const label = document.createElement('label');
                         label.className = 'flex items-center gap-1 bg-white border border-gray-300 px-2 py-1 rounded cursor-pointer hover:bg-red-50 transition';
-                        label.innerHTML = `<input type="checkbox" class="chk-excluir" value="${r.ingredient_id}" data-nombre="${ing.nombre}"> <span class="text-red-600 font-bold">Sin</span> ${ing.nombre}`;
+                        label.innerHTML = `<input type="checkbox" class="chk-excluir" value="${r.ingredient_id}" data-nombre="${ing.nombre}"> <span class="text-red-600 font-bold">Sin</span> ${ing.nombre} (${r.cantidad_usada}${ing.unidad_medida})`;
                         excluirCont.appendChild(label);
                     }
                 });
@@ -524,14 +656,14 @@
             const contenedor = document.getElementById('extras-items');
             const div = document.createElement('div');
             div.className = 'flex gap-2 items-center';
-            let opciones = listaIngredientesGlobal.map(i => `<option value="${i.id}">${i.nombre} ($${i.costo_unitario} cost)</option>`).join('');
+            let opciones = listaIngredientesGlobal.map(i => `<option value="${i.id}">${i.nombre} ($${i.costo_unitario}/${i.unidad_medida})</option>`).join('');
             
             div.innerHTML = `
-                <select class="extra-ing border rounded p-1 text-xs flex-1">
+                <select class="extra-ing border rounded p-1 text-xs flex-1 bg-white">
                     <option value="">Elegir ingrediente extra...</option>
                     ${opciones}
                 </select>
-                <input type="number" step="any" class="extra-cant border rounded p-1 text-xs w-16" placeholder="Cant" value="1">
+                <input type="number" step="any" class="extra-cant border rounded p-1 text-xs w-20 bg-white" placeholder="Gr / Un" value="1">
                 <button type="button" onclick="this.parentElement.remove()" class="text-red-500 font-bold">X</button>
             `;
             contenedor.appendChild(div);
@@ -564,12 +696,13 @@
                 
                 if(id && eCant) {
                     extras.push({ ingredient_id: parseInt(id), cantidad_usada: parseFloat(eCant) });
-                    const nombreLimpio = selectExtra.options[selectExtra.selectedIndex].text.split('(')[0].trim();
-                    extrasDesc.push(`${eCant}x ${nombreLimpio}`);
+                    const ingObj = listaIngredientesGlobal.find(i => i.id == id);
+                    const unidadTxt = ingObj ? ingObj.unidad_medida : '';
+                    const nombreLimpio = ingObj ? ingObj.nombre : selectExtra.options[selectExtra.selectedIndex].text.split('(')[0].trim();
+                    extrasDesc.push(`${eCant}${unidadTxt} ${nombreLimpio}`);
                 }
             });
 
-            // Validar que el plato tenga al menos un insumo activo para prepararse
             const insumosBaseActivos = (prod.receta || []).filter(r => r.ingredients && r.ingredients.nombre && !excluidos.includes(r.ingredient_id));
             if (insumosBaseActivos.length === 0 && extras.length === 0) {
                 alert(`⚠️ No puedes agregar "${prod.nombre}" porque no tiene ningún insumo activo (quitaste todos sus ingredientes).`);
@@ -676,7 +809,11 @@
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(data)
             });
-            if (res.ok) { document.getElementById('ingredient-form').reset(); await cargarTodo(); }
+            if (res.ok) {
+                document.getElementById('ingredient-form').reset();
+                actualizarEtiquetasCalculadora();
+                await cargarTodo();
+            }
         }
 
         async function registrarGasto(event) {
@@ -707,6 +844,8 @@
             document.getElementById('lbl-porcentaje').innerText = `${data.porcentaje_neto}%`;
         }
 
+        // --- HISTORIAL DETALLADO Y CANCELACIÓN DE PEDIDOS (PARCIAL Y TOTAL) ---
+
         async function cargarVentas() {
             try {
                 listaVentasGlobal = await (await fetch('/sales')).json();
@@ -717,37 +856,114 @@
                     return;
                 }
 
-                listaVentasGlobal.slice(0, 20).forEach(v => {
+                listaVentasGlobal.slice(0, 25).forEach(v => {
                     const fechaStr = v.created_at ? new Date(v.created_at).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' }) : '';
-                    const platosHtml = (v.detalles_pedido || []).map(item => `<li>• ${item}</li>`).join('');
                     const tel = v.cliente_telefono ? `📞 ${v.cliente_telefono}` : '📞 Sin tel.';
                     const dir = v.cliente_direccion ? `📍 ${v.cliente_direccion}` : '📍 Recoge / Sin dir.';
+                    const esAnulada = Boolean(v.anulada);
+
+                    let itemsHtml = '';
+                    if (v.items_detalle && v.items_detalle.length > 0) {
+                        itemsHtml = v.items_detalle.map(it => {
+                            const qAct = it.q || 0;
+                            const qCanc = it.q_canc || 0;
+                            const subtotalItem = Math.round(qAct * (it.precio_u || 0));
+
+                            if (qAct > 0 && !esAnulada) {
+                                const btnLabel = qAct > 1 ? '✖ Quitar 1' : '✖ Cancelar plato';
+                                return `
+                                    <li class="flex justify-between items-center py-1 border-b last:border-b-0">
+                                        <div>
+                                            <span class="font-semibold text-gray-800">${qAct}x ${it.nombre}</span>
+                                            <span class="text-gray-500 text-[10px]">${it.nota || ''}</span>
+                                            <span class="text-green-700 font-bold text-[10px] ml-1">($${subtotalItem})</span>
+                                            ${qCanc > 0 ? `<span class="text-[10px] text-red-500 line-through ml-1">[Cancelado: ${qCanc}x]</span>` : ''}
+                                        </div>
+                                        <button onclick="cancelarItemDeVenta(${v.id}, ${it.index}, '${it.nombre.replace(/'/g, "\\'")}', ${qAct})" class="text-[10px] bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 px-1.5 py-0.5 rounded font-bold transition">
+                                            ${btnLabel}
+                                        </button>
+                                    </li>
+                                `;
+                            } else {
+                                const totalCanc = qCanc || qAct;
+                                return `
+                                    <li class="flex justify-between items-center py-1 text-gray-400 line-through">
+                                        <span>• ${totalCanc}x ${it.nombre}${it.nota || ''}</span>
+                                        <span class="text-[10px] text-red-500 font-bold no-underline">CANCELADO</span>
+                                    </li>
+                                `;
+                            }
+                        }).join('');
+                    } else {
+                        itemsHtml = (v.detalles_pedido || []).map(item => `<li>• ${item}</li>`).join('');
+                    }
 
                     cont.innerHTML += `
-                        <div class="border rounded-lg p-2.5 bg-gray-50 hover:bg-white transition shadow-xs space-y-1">
+                        <div class="border rounded-lg p-2.5 transition shadow-xs space-y-1.5 ${esAnulada ? 'bg-red-50/40 border-red-200 opacity-75' : 'bg-gray-50 hover:bg-white'}">
                             <div class="flex justify-between items-center border-b pb-1">
                                 <div>
-                                    <span class="font-bold text-gray-800">#${v.id} - ${v.cliente_nombre || 'Cliente'}</span>
+                                    <span class="font-bold ${esAnulada ? 'line-through text-gray-500' : 'text-gray-800'}">#${v.id} - ${v.cliente_nombre || 'Cliente'}</span>
                                     <span class="text-[10px] text-gray-400 ml-1">${fechaStr}</span>
                                 </div>
                                 <div class="flex items-center gap-1.5">
-                                    <span class="text-[10px] px-1.5 py-0.5 rounded bg-purple-100 text-purple-800 font-semibold">${v.metodo_pago || 'Efectivo'}</span>
-                                    <span class="font-bold text-green-600 text-sm">+$${v.total}</span>
+                                    ${esAnulada 
+                                        ? `<span class="text-[10px] px-2 py-0.5 rounded bg-red-600 text-white font-bold">🚫 PEDIDO ANULADO</span>
+                                           <span class="text-xs text-gray-400 line-through">$${v.total_orig || 0}</span>`
+                                        : `<span class="text-[10px] px-1.5 py-0.5 rounded bg-purple-100 text-purple-800 font-semibold">${v.metodo_pago || 'Efectivo'}</span>
+                                           <span class="font-bold text-green-600 text-sm">+$${v.total}</span>
+                                           <button onclick="anularPedidoCompleto(${v.id}, '${(v.cliente_nombre || 'Cliente').replace(/'/g, "\\'")}')" class="text-[10px] bg-red-600 hover:bg-red-700 text-white px-2 py-0.5 rounded font-bold ml-1 transition">🚫 Anular Todo</button>`
+                                    }
                                 </div>
                             </div>
                             <div class="text-[11px] text-gray-600 flex flex-wrap gap-x-3 gap-y-0.5">
                                 <span>${tel}</span>
                                 <span>${dir}</span>
                             </div>
-                            <div class="bg-white border rounded p-1.5 text-[11px] text-gray-800">
-                                <b class="text-[10px] text-gray-500 uppercase block mb-0.5">Pedido:</b>
-                                <ul class="space-y-0.5 font-medium">${platosHtml}</ul>
+                            <div class="bg-white border rounded p-2 text-[11px] text-gray-800">
+                                <b class="text-[10px] text-gray-500 uppercase block mb-1">Detalle del Pedido:</b>
+                                <ul class="space-y-0.5">${itemsHtml}</ul>
                             </div>
                             <div class="text-[10px] text-gray-400 text-right">Atendió: <b>${v.registrado_por || 'Cajero'}</b></div>
                         </div>
                     `;
                 });
             } catch (e) { console.error(e); }
+        }
+
+        async function cancelarItemDeVenta(saleId, itemIndex, nombrePlato, cantActual) {
+            const msg = cantActual > 1
+                ? `¿Cancelar 1 unidad de "${nombrePlato}" en el Pedido #${saleId}?\nSe devolverán sus gramos/insumos al inventario y se descontará del total.`
+                : `¿Cancelar el plato "${nombrePlato}" del Pedido #${saleId}?\nSe devolverán sus gramos/insumos al inventario y se actualizará la factura.`;
+
+            if (!confirm(msg)) return;
+
+            const res = await fetch(`/ventas/${saleId}/cancelar-item`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ item_index: itemIndex, cantidad: 1 })
+            });
+            const data = await res.json();
+
+            if (res.ok) {
+                await cargarTodo();
+                alert(`✅ ${data.mensaje}\nNuevo total del pedido: $${data.nuevo_total}`);
+            } else {
+                alert('Error: ' + (data.detail || 'No se pudo cancelar el plato.'));
+            }
+        }
+
+        async function anularPedidoCompleto(saleId, cliente) {
+            if (!confirm(`⚠️ ¿Seguro que deseas ANULAR POR COMPLETO el Pedido #${saleId} de "${cliente}"?\n\nTodos los gramos, mililitros y unidades se devolverán al stock y el cobro pasará a $0.`)) return;
+
+            const res = await fetch(`/ventas/${saleId}/cancelar`, { method: 'POST' });
+            const data = await res.json();
+
+            if (res.ok) {
+                await cargarTodo();
+                alert(`✅ ${data.mensaje}`);
+            } else {
+                alert('Error: ' + (data.detail || 'No se pudo anular el pedido.'));
+            }
         }
         
         async function cargarGastos() {
@@ -758,21 +974,21 @@
 
         function abrirModalCierreCaja() {
             const data = reporteFinancieroGlobal['diario'] || { ingresos: 0, gastos: 0, ganancia: 0 };
-            const ventasTurno = (listaVentasGlobal || []).filter(v => v.turno_actual);
+            const ventasTurnoActivas = (listaVentasGlobal || []).filter(v => v.turno_actual && !v.anulada);
+            const ventasTurnoAnuladas = (listaVentasGlobal || []).filter(v => v.turno_actual && v.anulada);
 
-            // Agrupar totales por método de pago
             const porMetodo = {};
-            ventasTurno.forEach(v => {
+            ventasTurnoActivas.forEach(v => {
                 const m = v.metodo_pago || 'Efectivo';
                 porMetodo[m] = (porMetodo[m] || 0) + parseFloat(v.total || 0);
             });
 
             const metodosHtml = Object.keys(porMetodo).length > 0
-                ? Object.entries(porMetodo).map(([m, tot]) => `<div class="flex justify-between border-b py-1"><span>${m}:</span><b>$${tot}</b></div>`).join('')
-                : '<div class="text-gray-400 italic">Sin ventas en este turno.</div>';
+                ? Object.entries(porMetodo).map(([m, tot]) => `<div class="flex justify-between border-b py-1"><span>${m}:</span><b>$${Math.round(tot * 100) / 100}</b></div>`).join('')
+                : '<div class="text-gray-400 italic">Sin ventas activas en este turno.</div>';
 
-            const listaDetalleHtml = ventasTurno.length > 0
-                ? ventasTurno.map(v => `
+            const listaDetalleHtml = ventasTurnoActivas.length > 0
+                ? ventasTurnoActivas.map(v => `
                     <div class="border rounded p-2 bg-gray-50 space-y-1">
                         <div class="flex justify-between font-bold">
                             <span>#${v.id} - ${v.cliente_nombre} (${v.metodo_pago || 'Efectivo'})</span>
@@ -782,7 +998,7 @@
                         <div class="text-[11px] text-gray-800 font-medium">${(v.detalles_pedido || []).join(' , ')}</div>
                     </div>
                 `).join('')
-                : '<div class="text-gray-400 italic">No hay pedidos registrados en el turno actual.</div>';
+                : '<div class="text-gray-400 italic">No hay pedidos activos en el turno actual.</div>';
 
             document.getElementById('cierre-resumen-contenido').innerHTML = `
                 <div class="grid grid-cols-3 gap-2 text-center bg-amber-50 p-3 rounded border border-amber-200">
@@ -791,11 +1007,14 @@
                     <div><span class="block text-gray-500 text-[11px]">Ganancia Neta</span><b class="text-blue-600 text-sm">$${data.ganancia}</b></div>
                 </div>
                 <div>
-                    <h4 class="font-bold text-gray-700 mb-1">💳 Cómo se vendió (Por Método de Pago):</h4>
+                    <h4 class="font-bold text-gray-700 mb-1">💳 Dinero Real en Caja (Por Método de Pago):</h4>
                     <div class="bg-white border rounded p-2.5 space-y-1">${metodosHtml}</div>
                 </div>
                 <div>
-                    <h4 class="font-bold text-gray-700 mb-1">🍔 Qué se vendió en el turno (${ventasTurno.length} pedidos):</h4>
+                    <div class="flex justify-between items-center mb-1">
+                        <h4 class="font-bold text-gray-700">🍔 Pedidos Efectivos del Turno (${ventasTurnoActivas.length}):</h4>
+                        ${ventasTurnoAnuladas.length > 0 ? `<span class="text-[11px] text-red-600 font-semibold">🚫 ${ventasTurnoAnuladas.length} anulado(s)</span>` : ''}
+                    </div>
                     <div class="space-y-2 max-h-60 overflow-y-auto">${listaDetalleHtml}</div>
                 </div>
             `;
